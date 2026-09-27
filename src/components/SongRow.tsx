@@ -1,14 +1,12 @@
 "use client";
 
-import { EllipsisVertical, Guitar, Star } from "lucide-react";
+import { Guitar, Star } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
-import { openExternal } from "@/lib/client/actions";
+import { openSongsterr } from "@/lib/client/actions";
 import { plays, timeAgo } from "@/lib/client/format";
 import type { SongView } from "@/lib/client/views";
 import { INSTRUMENT_LABEL, STATUS_LABEL } from "@/lib/shared/types";
 import { PlusOne } from "./PlusOne";
-import { SongActions } from "./SongActions";
 import { TagPills } from "./TagPills";
 import { Thumb } from "./Thumb";
 
@@ -23,7 +21,6 @@ export function SongRow({
   showInstrument?: boolean;
   meta?: string;
 }) {
-  const [menu, setMenu] = useState(false);
   const { entry, song } = view;
   const href = `/song?id=${view.id}`;
   return (
@@ -64,17 +61,13 @@ export function SongRow({
             className="icon-btn sm"
             style={{ color: "#ff8080" }}
             aria-label="Open in Songsterr"
-            onClick={() => openExternal(entry.songsterrUrl!, view.id)}
+            onClick={() => openSongsterr(entry.songsterrUrl!, view.id)}
           >
             <Guitar />
           </button>
         ) : null}
         <PlusOne entryId={view.id} />
-        <button className="icon-btn sm muted" aria-label="More" onClick={() => setMenu(true)}>
-          <EllipsisVertical />
-        </button>
       </div>
-      <SongActions view={view} open={menu} onClose={() => setMenu(false)} />
     </div>
   );
 }

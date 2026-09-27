@@ -1,5 +1,6 @@
 import {
   boolean,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -42,6 +43,8 @@ export const repertoireEntries = pgTable(
     playCount: integer("play_count").notNull().default(0),
     lastPlayedAt: ts("last_played_at"),
     isFavorite: boolean("is_favorite").notNull().default(false),
+    /** Manual order inside its status column on the board (lower = higher up). */
+    position: doublePrecision("position").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },

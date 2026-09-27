@@ -1,33 +1,122 @@
 "use client";
 
-import { ChevronRight, ClipboardPaste, Library, Plus, Search } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  closestCorners,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ClipboardPaste, Library, Plus, Search, Settings, X } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BoardCard } from "@/components/BoardCard";
 import { LoadingList } from "@/components/Loading";
-import { SongCard } from "@/components/SongCard";
-import { SongRow } from "@/components/SongRow";
 import { TopBar } from "@/components/TopBar";
-import { daysSince, plays, timeAgo } from "@/lib/client/format";
-import { useLoaded } from "@/lib/client/store";
-import { byLastPlayedAsc, byLastPlayedDesc, byRecentlyAdded, byTitle, useViews, type SongView } from "@/lib/client/views";
+import { moveEntry } from "@/lib/client/actions";
+import { daysSince } from "@/lib/client/format";
+import { useData, useLoaded } from "@/lib/client/store";
+import { useViews, type SongView } from "@/lib/client/views";
+import { INSTRUMENT_LABEL, STATUSES, STATUS_LABEL, type Instrument, type Status } from "@/lib/shared/types";
+import { normalizeKey } from "@/lib/shared/urls";
 
-const favFirst = (sort: (a: SongView, b: SongView) => number) => (a: SongView, b: SongView) =>
-  Number(b.entry.isFavorite) - Number(a.entry.isFavorite) || sort(a, b);
+type Columns = Record<Status, string[]>;
+type Quick = "pinned" | "tab" | "stale";
 
-function Section({ title, href, children }: { title: string; href?: string; children: React.ReactNode }) {
+const QUICK_LABEL: Record<Quick, string> = { pinned: "Pinned", tab: "Has tab", stale: "Not played in 30d" };
+
+const colId = (s: Status) => `col:${s}`;
+const pillId = (s: Status) => `pill:${s}`;
+const statusOfDroppable = (id: string): Status | null =>
+  id.startsWith("col:") || id.startsWith("pill:") ? (id.split(":")[1] as Status) : null;
+
+const byPosition = (a: SongView, b: SongView) =>
+  (a.entry.position ?? 0) - (b.entry.position ?? 0) || b.entry.createdAt.localeCompare(a.entry.createdAt);
+
+// ---------------------------------------------------------------------------
+
+function SortableCard({ view, wasDragging }: { view: SongView; wasDragging: () => boolean }) {
+  const { setNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id: view.id });
   return (
-    <section className="section">
-      <div className="section-head">
-        <h2 className="section-title">{title}</h2>
-        {href && (
-          <Link href={href}>
-            See all <ChevronRight />
-          </Link>
-        )}
-      </div>
-      {children}
+    <BoardCard
+      view={view}
+      dragRef={setNodeRef}
+      dragProps={{ ...attributes, ...listeners }}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      ghost={isDragging}
+      wasDragging={wasDragging}
+    />
+  );
+}
+
+function Column({
+  status,
+  views,
+  wasDragging,
+  highlight,
+}: {
+  status: Status;
+  views: SongView[];
+  wasDragging: () => boolean;
+  highlight: boolean;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: colId(status) });
+  return (
+    <section className={`board-col ${isOver || highlight ? "over" : ""}`} data-status={status} id={`column-${status}`}>
+      <header className="board-col-head">
+        <span className="status-badge" data-status={status} />
+        <h2>{STATUS_LABEL[status]}</h2>
+        <span className="meta">{views.length}</span>
+        <Link href={`/add?manual=1&status=${status}`} className="icon-btn sm muted" aria-label={`Add to ${STATUS_LABEL[status]}`}>
+          <Plus />
+        </Link>
+      </header>
+      <SortableContext items={views.map((v) => v.id)} strategy={verticalListSortingStrategy}>
+        <div ref={setNodeRef} className="board-col-body">
+          {views.map((v) => (
+            <SortableCard key={v.id} view={v} wasDragging={wasDragging} />
+          ))}
+          {views.length === 0 && <div className="board-empty">Drop songs here</div>}
+        </div>
+      </SortableContext>
     </section>
+  );
+}
+
+function StatusPill({
+  status,
+  count,
+  active,
+  dragging,
+  onClick,
+}: {
+  status: Status;
+  count: number;
+  active: boolean;
+  dragging: boolean;
+  onClick: () => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: pillId(status) });
+  return (
+    <button
+      ref={setNodeRef}
+      className={`status-pill ${active ? "active" : ""} ${dragging ? "droppable" : ""} ${isOver ? "over" : ""}`}
+      onClick={onClick}
+    >
+      <span className="status-badge" data-status={status} />
+      {STATUS_LABEL[status]}
+      <span className="n">{count}</span>
+    </button>
   );
 }
 
@@ -64,36 +153,183 @@ function Welcome() {
   );
 }
 
-export default function HomePage() {
+// ---------------------------------------------------------------------------
+
+function Board() {
+  const params = useSearchParams();
   const loaded = useLoaded();
+  const data = useData();
   const views = useViews();
 
-  const s = useMemo(() => {
-    const active = views.filter((v) => v.entry.status !== "ARCHIVED");
-    const ready = active.filter((v) => v.entry.status === "CAN_PLAY" || v.entry.status === "MASTERED");
-    const tunings = new Map<string, number>();
-    for (const v of active) if (v.entry.tuning) tunings.set(v.entry.tuning, (tunings.get(v.entry.tuning) ?? 0) + 1);
-    return {
-      learning: active.filter((v) => v.entry.status === "LEARNING").sort(favFirst(byLastPlayedDesc)),
-      want: active.filter((v) => v.entry.status === "WANT_TO_PLAY").sort(favFirst(byRecentlyAdded)),
-      ready: ready.slice().sort(favFirst(byTitle)),
-      recent: active.filter((v) => v.entry.lastPlayedAt).sort(byLastPlayedDesc).slice(0, 5),
-      stale: ready.filter((v) => daysSince(v.entry.lastPlayedAt) > 14).sort(byLastPlayedAsc).slice(0, 6),
-      tunings: [...tunings.entries()].sort((a, b) => b[1] - a[1]),
-      total: active.length,
-    };
-  }, [views]);
+  const [tuning, setTuning] = useState<string | null>(params.get("tuning"));
+  const [tagIds, setTagIds] = useState<string[]>(params.get("tag") ? [params.get("tag")!] : []);
+  const [instrument, setInstrument] = useState<Instrument | null>(null);
+  const [quick, setQuick] = useState<Quick[]>([]);
+  const [searchOpen, setSearchOpen] = useState(params.get("search") === "1");
+  const [query, setQuery] = useState("");
+  const [activeCol, setActiveCol] = useState<Status>("WANT_TO_PLAY");
+  const boardRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const searchAction = (
-    <Link href="/library?search=1" className="icon-btn" aria-label="Search library">
-      <Search />
+  // --- filtering -----------------------------------------------------------
+  const filtered = useMemo(() => {
+    const q = normalizeKey(query);
+    return views.filter((v) => {
+      if (tuning && v.entry.tuning !== tuning) return false;
+      if (instrument && v.entry.instrument !== instrument) return false;
+      if (tagIds.length && !tagIds.every((id) => v.tags.some((t) => t.id === id))) return false;
+      if (quick.includes("pinned") && !v.entry.isFavorite) return false;
+      if (quick.includes("tab") && !v.entry.songsterrUrl) return false;
+      if (quick.includes("stale") && daysSince(v.entry.lastPlayedAt) <= 30) return false;
+      if (q && !normalizeKey(`${v.song.title} ${v.song.artist} ${v.tags.map((t) => t.name).join(" ")}`).includes(q)) return false;
+      return true;
+    });
+  }, [views, tuning, instrument, tagIds, quick, query]);
+
+  const derived = useMemo(() => {
+    const cols = Object.fromEntries(STATUSES.map((s) => [s, [] as string[]])) as Columns;
+    for (const v of filtered.slice().sort(byPosition)) cols[v.entry.status].push(v.id);
+    return cols;
+  }, [filtered]);
+
+  const byId = useMemo(() => new Map(views.map((v) => [v.id, v])), [views]);
+
+  const tunings = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of views) if (v.entry.tuning) m.set(v.entry.tuning, (m.get(v.entry.tuning) ?? 0) + 1);
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+  }, [views]);
+  const instruments = useMemo(() => Array.from(new Set(views.map((v) => v.entry.instrument))), [views]);
+  const tags = useMemo(() => data.tags.slice().sort((a, b) => a.name.localeCompare(b.name)), [data.tags]);
+  const filterCount = Number(!!tuning) + tagIds.length + Number(!!instrument) + quick.length + Number(!!query);
+
+  // --- drag & drop ---------------------------------------------------------
+  const [cols, setCols] = useState<Columns | null>(null); // live layout while dragging
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overStatus, setOverStatus] = useState<Status | null>(null);
+  const dragEndedAt = useRef(0);
+  const wasDragging = useCallback(() => Date.now() - dragEndedAt.current < 250, []);
+  const layout = cols ?? derived;
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const containerOf = (id: string, c: Columns): Status | null =>
+    statusOfDroppable(id) ?? STATUSES.find((s) => c[s].includes(id)) ?? null;
+
+  const onDragStart = (e: DragStartEvent) => {
+    setActiveId(String(e.active.id));
+    setCols(structuredClone(derived));
+    navigator.vibrate?.(8);
+  };
+
+  const onDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over || !cols) return;
+    const overId = String(over.id);
+    if (overId.startsWith("pill:")) {
+      setOverStatus(statusOfDroppable(overId));
+      return;
+    }
+    setOverStatus(null);
+    const from = containerOf(String(active.id), cols);
+    const to = containerOf(overId, cols);
+    if (!from || !to || from === to) return;
+    setCols((c) => {
+      if (!c) return c;
+      const src = c[from].filter((id) => id !== active.id);
+      const dst = c[to].slice();
+      const idx = overId.startsWith("col:") ? dst.length : Math.max(0, dst.indexOf(overId));
+      dst.splice(idx, 0, String(active.id));
+      return { ...c, [from]: src, [to]: dst };
+    });
+  };
+
+  const finish = () => {
+    dragEndedAt.current = Date.now();
+    setCols(null);
+    setActiveId(null);
+    setOverStatus(null);
+  };
+
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    const id = String(active.id);
+    if (!over || !cols) return finish();
+    const overId = String(over.id);
+
+    // Dropped on a status pill: move to the top of that column.
+    if (overId.startsWith("pill:")) {
+      const status = statusOfDroppable(overId)!;
+      const others = views.filter((v) => v.entry.status === status && v.id !== id);
+      const top = others.length ? Math.min(...others.map((v) => v.entry.position ?? 0)) - 1 : 0;
+      moveEntry(id, status, top);
+      return finish();
+    }
+
+    // Resolve the target from the drop point itself, so a fast drop that skipped
+    // onDragOver still lands in the right column.
+    const from = containerOf(id, cols);
+    const status = containerOf(overId, cols) ?? from;
+    if (!from || !status) return finish();
+    let list: string[];
+    if (from === status) {
+      list = cols[status];
+      if (!overId.startsWith("col:") && list.includes(overId)) list = arrayMove(list, list.indexOf(id), list.indexOf(overId));
+    } else {
+      list = cols[status].filter((x) => x !== id);
+      const at = overId.startsWith("col:") ? list.length : Math.max(0, list.indexOf(overId));
+      list.splice(at, 0, id);
+    }
+    const i = list.indexOf(id);
+    const pos = (x: string | undefined) => (x ? (byId.get(x)?.entry.position ?? 0) : undefined);
+    const prev = pos(list[i - 1]);
+    const next = pos(list[i + 1]);
+    const position =
+      prev == null && next == null ? 0 : prev == null ? next! - 1 : next == null ? prev + 1 : (prev + next) / 2;
+    moveEntry(id, status, position);
+    finish();
+  };
+
+  // --- mobile column navigation -------------------------------------------
+  const scrollToColumn = (s: Status) => {
+    document.getElementById(`column-${s}`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+  };
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const first = el.firstElementChild as HTMLElement | null;
+      if (!first) return;
+      const w = first.getBoundingClientRect().width + 12;
+      setActiveCol(STATUSES[Math.min(STATUSES.length - 1, Math.round(el.scrollLeft / w))]);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [loaded, views.length]);
+
+  // Deep links like /?status=LEARNING open on that column.
+  useEffect(() => {
+    const s = params.get("status") as Status | null;
+    if (loaded && s && STATUSES.includes(s)) setTimeout(() => scrollToColumn(s), 50);
+  }, [params, loaded]);
+
+  useEffect(() => {
+    if (searchOpen) searchRef.current?.focus();
+  }, [searchOpen]);
+
+  const settingsLink = (
+    <Link href="/settings" className="icon-btn mobile-only" aria-label="Settings">
+      <Settings />
     </Link>
   );
 
   if (!loaded) {
     return (
       <>
-        <TopBar brand actions={searchAction} />
+        <TopBar brand actions={settingsLink} />
         <LoadingList />
       </>
     );
@@ -101,89 +337,141 @@ export default function HomePage() {
   if (!views.length) {
     return (
       <>
-        <TopBar brand />
+        <TopBar brand actions={settingsLink} />
         <Welcome />
       </>
     );
   }
 
+  const toggleQuick = (q: Quick) => setQuick((l) => (l.includes(q) ? l.filter((x) => x !== q) : [...l, q]));
+  const activeView = activeId ? byId.get(activeId) : null;
+
   return (
-    <>
-      <TopBar brand actions={searchAction} />
-      <div className="container">
-        {s.tunings.length > 1 && (
-          <div className="chip-row" style={{ marginTop: 4 }}>
-            <Link href="/library" className="chip active">
-              All · {s.total}
-            </Link>
-            {s.tunings.map(([t, n]) => (
-              <Link key={t} href={`/library?tuning=${encodeURIComponent(t)}`} className="chip">
-                {t} <span style={{ opacity: 0.55 }}>{n}</span>
-              </Link>
-            ))}
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCorners}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      onDragCancel={finish}
+    >
+      <TopBar
+        brand
+        actions={
+          <>
+            <button
+              className="icon-btn"
+              aria-label="Search"
+              onClick={() => {
+                setSearchOpen((o) => !o);
+                setQuery("");
+              }}
+            >
+              {searchOpen ? <X /> : <Search />}
+            </button>
+            {settingsLink}
+          </>
+        }
+      />
+
+      <div className="container board-filters">
+        {searchOpen && (
+          <div className="input-icon" style={{ marginBottom: 10 }}>
+            <Search />
+            <input
+              ref={searchRef}
+              className="input search"
+              placeholder="Search songs, artists, tags"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
         )}
-
-        <Section title="Currently Learning" href="/library?status=LEARNING">
-          {s.learning.length ? (
-            <div className="carousel">
-              {s.learning.map((v) => (
-                <SongCard key={v.id} view={v} launcherMax={4} />
-              ))}
-            </div>
-          ) : (
-            <p className="meta">Nothing in progress. Move a song to Learning from its menu.</p>
+        <div className="chip-row">
+          {filterCount > 0 && (
+            <button
+              className="chip"
+              onClick={() => {
+                setTuning(null);
+                setTagIds([]);
+                setInstrument(null);
+                setQuick([]);
+                setQuery("");
+              }}
+            >
+              <X /> Clear
+            </button>
           )}
-        </Section>
+          {tunings.map((t) => (
+            <button key={t} className={`chip ${tuning === t ? "active" : ""}`} onClick={() => setTuning(tuning === t ? null : t)}>
+              {t}
+            </button>
+          ))}
+          <span className="chip-sep" />
+          {tags.map((t) => {
+            const on = tagIds.includes(t.id);
+            return (
+              <button
+                key={t.id}
+                className={`chip ${on ? "active" : ""}`}
+                onClick={() => setTagIds(on ? tagIds.filter((x) => x !== t.id) : [...tagIds, t.id])}
+              >
+                <span className="tag-dot" style={t.color ? { background: t.color } : undefined} />
+                {t.name}
+              </button>
+            );
+          })}
+          {tags.length > 0 && <span className="chip-sep" />}
+          {(Object.keys(QUICK_LABEL) as Quick[]).map((q) => (
+            <button key={q} className={`chip ${quick.includes(q) ? "active" : ""}`} onClick={() => toggleQuick(q)}>
+              {QUICK_LABEL[q]}
+            </button>
+          ))}
+          {instruments.length > 1 &&
+            instruments.map((i) => (
+              <button key={i} className={`chip ${instrument === i ? "active" : ""}`} onClick={() => setInstrument(instrument === i ? null : i)}>
+                {INSTRUMENT_LABEL[i]}
+              </button>
+            ))}
+        </div>
 
-        {s.want.length > 0 && (
-          <Section title="Want to Play" href="/library?status=WANT_TO_PLAY">
-            <div className="carousel compact">
-              {s.want.slice(0, 20).map((v) => (
-                <SongCard key={v.id} view={v} showTags={false} launcherMax={2} />
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {s.ready.length > 0 && (
-          <Section title="Ready to Play" href="/library?status=READY">
-            <div className="carousel compact">
-              {s.ready.slice(0, 24).map((v) => (
-                <SongCard key={v.id} view={v} showTags={false} launcherMax={2} />
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {s.recent.length > 0 && (
-          <Section title="Recently Played">
-            <div className="list">
-              {s.recent.map((v) => (
-                <SongRow
-                  key={v.id}
-                  view={v}
-                  meta={`${timeAgo(v.entry.lastPlayedAt)} · ${plays(v.entry.playCount)}${v.entry.tuning ? ` · ${v.entry.tuning}` : ""}`}
-                />
-              ))}
-            </div>
-          </Section>
-        )}
-
-        {s.stale.length > 0 && (
-          <Section title="Haven't Played in a While" href="/library?status=READY&sort=stale">
-            <div className="list">
-              {s.stale.map((v) => (
-                <SongRow
-                  key={v.id}
-                  view={v}
-                  meta={v.entry.lastPlayedAt ? `Last played ${timeAgo(v.entry.lastPlayedAt).toLowerCase()}` : "Never played"}
-                />
-              ))}
-            </div>
-          </Section>
-        )}
+        <div className="status-strip mobile-only">
+          {STATUSES.map((s) => (
+            <StatusPill
+              key={s}
+              status={s}
+              count={layout[s].length}
+              active={activeCol === s}
+              dragging={!!activeId}
+              onClick={() => scrollToColumn(s)}
+            />
+          ))}
+        </div>
       </div>
-    </>
+
+      <div ref={boardRef} className={`board ${activeId ? "is-dragging" : ""}`}>
+        {STATUSES.map((s) => (
+          <Column
+            key={s}
+            status={s}
+            views={layout[s].map((id) => byId.get(id)!).filter(Boolean)}
+            wasDragging={wasDragging}
+            highlight={overStatus === s}
+          />
+        ))}
+      </div>
+
+      <DragOverlay dropAnimation={{ duration: 180, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }}>
+        {activeView ? <BoardCard view={activeView} overlay /> : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+export default function BoardPage() {
+  return (
+    <Suspense>
+      <Board />
+    </Suspense>
   );
 }

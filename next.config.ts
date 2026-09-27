@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The board at "/" replaced the separate Library page; keep old links (and query filters) working.
+  async redirects() {
+    return [{ source: "/library", destination: "/", permanent: false }];
+  },
   async headers() {
     return [
       {

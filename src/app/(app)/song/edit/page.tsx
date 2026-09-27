@@ -154,7 +154,7 @@ function EditForm({ view }: { view: SongView }) {
                 onClick={() => {
                   updateEntry(entry.id, { status: "ARCHIVED" });
                   toast("Archived", { label: "Undo", run: () => updateEntry(entry.id, { status: entry.status }) });
-                  router.push("/library");
+                  router.push("/");
                 }}
               >
                 <Archive /> Archive
@@ -166,7 +166,7 @@ function EditForm({ view }: { view: SongView }) {
                 if (!confirm(`Delete “${song.title}” with all its resources, files and play history?`)) return;
                 deleteEntry(entry.id);
                 toast("Song deleted");
-                router.replace("/library");
+                router.replace("/");
               }}
             >
               <Trash2 /> Delete

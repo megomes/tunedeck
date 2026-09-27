@@ -1,7 +1,8 @@
 export const INSTRUMENTS = ["guitar", "bass", "piano"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
 
-export const STATUSES = ["LEARNING", "WANT_TO_PLAY", "CAN_PLAY", "MASTERED", "ARCHIVED"] as const;
+/** Board order: backlog → in progress → done. */
+export const STATUSES = ["WANT_TO_PLAY", "LEARNING", "CAN_PLAY", "MASTERED", "ARCHIVED"] as const;
 export type Status = (typeof STATUSES)[number];
 
 export const RESOURCE_TYPES = [
@@ -94,6 +95,8 @@ export interface Entry {
   playCount: number;
   lastPlayedAt: string | null;
   isFavorite: boolean;
+  /** Manual order inside its status column (lower = higher up). */
+  position: number;
   createdAt: string;
   updatedAt: string;
 }

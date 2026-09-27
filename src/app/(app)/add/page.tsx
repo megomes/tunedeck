@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, ChevronUp, ClipboardPaste, ExternalLink, Guitar, Link2, LoaderCircle, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, ClipboardPaste, ExternalLink, Guitar, Link2, LoaderCircle, Play, Search, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
-import { CategoryChips, InstrumentChips, LabelInput, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { InstrumentChips, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
 import { addResource, createSong, updateEntry } from "@/lib/client/actions";
@@ -11,8 +11,18 @@ import { duration } from "@/lib/client/format";
 import { fetchMeta, useData } from "@/lib/client/store";
 import { toast } from "@/lib/client/ui";
 import { findDuplicates, useViews, type SongView } from "@/lib/client/views";
-import { INSTRUMENT_LABEL, RESOURCE_LABEL, STATUS_LABEL, type Instrument, type ResourceType, type Status } from "@/lib/shared/types";
-import { detectProvider, extractFirstUrl, guessSongFromVideo, hostLabel, normalizeKey, youtubeId, ytThumb } from "@/lib/shared/urls";
+import {
+  INSTRUMENT_LABEL,
+  RESOURCE_SHORT,
+  RESOURCE_TYPES,
+  STATUSES,
+  STATUS_LABEL,
+  type Instrument,
+  type Provider,
+  type ResourceType,
+  type Status,
+} from "@/lib/shared/types";
+import { detectProvider, extractUrls, guessSongFromVideo, hostLabel, normalizeKey, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 
 interface Meta {
   title: string | null;
@@ -22,7 +32,109 @@ interface Meta {
   durationSeconds?: number | null;
 }
 
+interface LinkItem {
+  key: string;
+  url: string;
+  provider: Provider;
+  type: ResourceType;
+  label: string;
+  meta: Meta | null;
+  state: "loading" | "ok" | "failed";
+}
+
+interface NewSongState {
+  title: string;
+  artist: string;
+  instrument: Instrument;
+  status: Status;
+  tuning: string | null;
+  tagIds: string[];
+}
+
 // ---------------------------------------------------------------------------
+
+function LinkCard({
+  item,
+  onChange,
+  onRemove,
+}: {
+  item: LinkItem;
+  onChange: (patch: Partial<LinkItem>) => void;
+  onRemove: () => void;
+}) {
+  const ytId = youtubeId(item.url);
+  const title =
+    item.provider === "songsterr"
+      ? item.meta?.title
+        ? `${item.meta.title}${item.meta.artist ? ` — ${item.meta.artist}` : ""}`
+        : hostLabel(item.url)
+      : item.meta?.title || hostLabel(item.url);
+  const kind = item.provider === "songsterr" ? "Songsterr · tab" : item.provider === "youtube" ? "YouTube" : hostLabel(item.url);
+
+  return (
+    <div className={`link-card ${item.provider}`}>
+      <div className="link-card-top">
+        {ytId ? (
+          <Thumb src={item.meta?.thumbnailUrl ?? ytThumb(ytId)} title={title}>
+            {item.meta?.durationSeconds != null && (
+              <div className="thumb-overlay" style={{ justifyContent: "flex-end" }}>
+                <span className="badge">{duration(item.meta.durationSeconds)}</span>
+              </div>
+            )}
+          </Thumb>
+        ) : (
+          <div className="res-icon link-icon">{item.provider === "songsterr" ? <Guitar /> : <ExternalLink />}</div>
+        )}
+        <div className="row-main">
+          <span className={`link-kind ${item.provider}`}>
+            {item.provider === "youtube" && <Play size={10} fill="currentColor" />}
+            {item.provider === "songsterr" && <Guitar size={11} />}
+            {kind}
+          </span>
+          {item.state === "loading" ? (
+            <>
+              <span className="skeleton-line mt-2" style={{ width: "85%" }} />
+              <span className="skeleton-line mt-2" style={{ width: "45%" }} />
+            </>
+          ) : (
+            <>
+              <span className="row-title clamp-2" style={{ fontSize: 14, fontWeight: 500 }}>
+                {title}
+              </span>
+              {item.meta?.author && <span className="meta truncate">{item.meta.author}</span>}
+            </>
+          )}
+        </div>
+        <button type="button" className="icon-btn sm muted" aria-label="Remove link" onClick={onRemove}>
+          <X />
+        </button>
+      </div>
+
+      {item.provider !== "songsterr" && (
+        <>
+          <div className="chip-row">
+            {RESOURCE_TYPES.map((t) => (
+              <button
+                type="button"
+                key={t}
+                className={`chip sm ${item.type === t ? "active" : ""}`}
+                onClick={() => onChange({ type: t })}
+              >
+                {RESOURCE_SHORT[t]}
+              </button>
+            ))}
+          </div>
+          <input
+            className="input link-label"
+            placeholder="Label (optional) — Solo only, Best version…"
+            value={item.label}
+            onChange={(e) => onChange({ label: e.target.value })}
+          />
+        </>
+      )}
+    </div>
+  );
+}
 
 function SongPicker({ value, onChange }: { value: string | null; onChange: (id: string) => void }) {
   const views = useViews();
@@ -59,466 +171,322 @@ function SongPicker({ value, onChange }: { value: string | null; onChange: (id: 
   );
 }
 
-interface NewSongState {
-  title: string;
-  artist: string;
-  instrument: Instrument;
-  status: Status;
-  tuning: string | null;
-  tagIds: string[];
-}
-
-function NewSongFields({
-  value,
-  onChange,
-  duplicates,
-  onUseExisting,
-  compact = false,
-}: {
-  value: NewSongState;
-  onChange: (v: NewSongState) => void;
-  duplicates: SongView[];
-  onUseExisting?: (id: string) => void;
-  compact?: boolean;
-}) {
-  const [dismissed, setDismissed] = useState<string | null>(null);
-  const [showTags, setShowTags] = useState(false);
-  const dupKey = duplicates.map((d) => d.id).join();
-  const set = (patch: Partial<NewSongState>) => onChange({ ...value, ...patch });
+function DuplicateWarning({ dup, onUse, onDismiss }: { dup: SongView; onUse: () => void; onDismiss: () => void }) {
   return (
-    <div className="form-grid">
-      <div className="form-2" style={{ gridTemplateColumns: compact ? "1fr" : undefined }}>
-        <div className="field">
-          <label htmlFor="n-title">Song name</label>
-          <input id="n-title" className="input" value={value.title} onChange={(e) => set({ title: e.target.value })} placeholder="Numb" />
-        </div>
-        <div className="field">
-          <label htmlFor="n-artist">Artist</label>
-          <input id="n-artist" className="input" value={value.artist} onChange={(e) => set({ artist: e.target.value })} placeholder="Linkin Park" />
-        </div>
+    <div className="warn-box">
+      <div className="row-gap">
+        <AlertTriangle size={17} />
+        <strong style={{ fontWeight: 600 }}>This song may already exist.</strong>
       </div>
-
-      {duplicates.length > 0 && dismissed !== dupKey && (
-        <div className="warn-box">
-          <div className="row-gap">
-            <AlertTriangle size={17} />
-            <strong style={{ fontWeight: 600 }}>This song may already exist.</strong>
-          </div>
-          <span className="secondary">
-            {duplicates[0].song.title} — {duplicates[0].song.artist || "Unknown artist"} ({INSTRUMENT_LABEL[duplicates[0].entry.instrument]},{" "}
-            {STATUS_LABEL[duplicates[0].entry.status]})
-          </span>
-          <div className="row-gap" style={{ flexWrap: "wrap" }}>
-            {onUseExisting && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => onUseExisting(duplicates[0].id)}>
-                Add to existing song
-              </button>
-            )}
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDismissed(dupKey)}>
-              Create another entry anyway
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="field">
-        <span className="label">Status</span>
-        <StatusChips value={value.status} onChange={(status) => set({ status })} />
+      <span className="secondary">
+        {dup.song.title} — {dup.song.artist || "Unknown artist"} ({INSTRUMENT_LABEL[dup.entry.instrument]}, {STATUS_LABEL[dup.entry.status]})
+      </span>
+      <div className="row-gap" style={{ flexWrap: "wrap" }}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={onUse}>
+          Add links to existing song
+        </button>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onDismiss}>
+          Create another entry anyway
+        </button>
       </div>
-      {value.instrument !== "piano" && (
-        <div className="field">
-          <span className="label">Tuning</span>
-          <TuningPicker value={value.tuning} onChange={(tuning) => set({ tuning })} />
-        </div>
-      )}
-      <div className="field">
-        <span className="label">Instrument</span>
-        <InstrumentChips value={value.instrument} onChange={(instrument) => set({ instrument })} />
-      </div>
-      <button type="button" className="disclosure" onClick={() => setShowTags((s) => !s)}>
-        {showTags ? <ChevronUp /> : <ChevronDown />}
-        Tags {value.tagIds.length ? `(${value.tagIds.length})` : ""}
-      </button>
-      {showTags && <TagPicker value={value.tagIds} onChange={(tagIds) => set({ tagIds })} />}
     </div>
   );
 }
 
-function useNewSongDefaults(): NewSongState {
+// ---------------------------------------------------------------------------
+
+function defaultType(provider: Provider, existing: LinkItem[]): ResourceType {
+  if (provider !== "youtube") return "custom";
+  return existing.some((l) => l.provider === "youtube" && l.type === "original") ? "guitar_cover" : "original";
+}
+
+function Add() {
+  const router = useRouter();
+  const params = useSearchParams();
   const data = useData();
-  return {
+  const views = useViews();
+
+  const [links, setLinks] = useState<LinkItem[]>([]);
+  const [text, setText] = useState("");
+  const [target, setTarget] = useState<"new" | "existing">("new");
+  const [existingId, setExistingId] = useState<string | null>(null);
+  const [touched, setTouched] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [dismissedDup, setDismissedDup] = useState<string | null>(null);
+  const [canPaste, setCanPaste] = useState(false);
+  const requested = useRef(new Set<string>());
+
+  const fromColumn = params.get("status") as Status | null;
+  const [song, setSong] = useState<NewSongState>(() => ({
     title: "",
     artist: "",
     instrument: (data.settings.defaultInstrument as Instrument) ?? "guitar",
-    status: (data.settings.defaultStatus as Status) ?? "WANT_TO_PLAY",
+    status: fromColumn && STATUSES.includes(fromColumn) ? fromColumn : ((data.settings.defaultStatus as Status) ?? "WANT_TO_PLAY"),
     tuning: "E Standard",
     tagIds: [],
-  };
-}
+  }));
 
-// ---------------------------------------------------------------------------
+  function addUrls(urls: string[]) {
+    if (!urls.length) return;
+    setLinks((prev) => {
+      let next = prev.slice();
+      for (const raw of urls) {
+        const url = normalizeUrl(raw);
+        if (next.some((l) => l.url === url)) continue;
+        const provider = detectProvider(url);
+        // A song has one Songsterr tab: a new one replaces the previous.
+        if (provider === "songsterr") next = next.filter((l) => l.provider !== "songsterr");
+        next.push({
+          key: crypto.randomUUID(),
+          url,
+          provider,
+          type: defaultType(provider, next),
+          label: "",
+          meta: null,
+          state: provider === "external" ? "failed" : "loading",
+        });
+      }
+      return next;
+    });
+  }
 
-function LinkFlow({ url, onReset }: { url: string; onReset: () => void }) {
-  const router = useRouter();
-  const views = useViews();
-  const defaults = useNewSongDefaults();
-  const provider = detectProvider(url);
-  const ytId = youtubeId(url);
-
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [metaState, setMetaState] = useState<"loading" | "ok" | "failed">("loading");
-  const [type, setType] = useState<ResourceType>(provider === "youtube" ? "original" : "custom");
-  const [label, setLabel] = useState("");
-  const [target, setTarget] = useState<"new" | "existing">("new");
-  const [existingId, setExistingId] = useState<string | null>(null);
-  const [song, setSong] = useState<NewSongState>(defaults);
-  const [touched, setTouched] = useState(false);
-  const [saved, setSaved] = useState(false);
-
+  // Share Target / deep link: YouTube shares in `text`, browsers in `url`.
   useEffect(() => {
-    let cancelled = false;
-    if (provider === "external") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setMetaState("failed");
-      return;
+    const shared = [params.get("url"), params.get("text"), params.get("title")].flatMap((v) => extractUrls(v));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    addUrls(shared);
+    setCanPaste(!!navigator.clipboard?.readText);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch metadata for new links (never blocks saving).
+  useEffect(() => {
+    for (const l of links) {
+      if (l.state !== "loading" || requested.current.has(l.key)) continue;
+      requested.current.add(l.key);
+      fetchMeta(l.url)
+        .then((m: Meta | null) =>
+          setLinks((ls) => ls.map((x) => (x.key === l.key ? { ...x, meta: m, state: m ? "ok" : "failed" } : x))),
+        )
+        .catch(() => setLinks((ls) => ls.map((x) => (x.key === l.key ? { ...x, state: "failed" } : x))));
     }
-    fetchMeta(url)
-      .then((m: Meta | null) => {
-        if (cancelled) return;
-        setMeta(m);
-        setMetaState(m ? "ok" : "failed");
-      })
-      .catch(() => !cancelled && setMetaState("failed"));
-    return () => {
-      cancelled = true;
-    };
-  }, [url, provider]);
+  }, [links]);
 
-  // Prefill the new-song form from metadata once it arrives (unless the user already typed).
+  // Prefill name/artist from the best link (Songsterr is the most precise) until the user types.
+  const guess = useMemo(() => {
+    const ss = links.find((l) => l.provider === "songsterr" && l.meta?.title);
+    if (ss) return { title: ss.meta!.title ?? "", artist: ss.meta!.artist ?? "" };
+    const yt = links.find((l) => l.provider === "youtube" && l.meta?.title && l.type === "original") ??
+      links.find((l) => l.provider === "youtube" && l.meta?.title);
+    return yt ? guessSongFromVideo(yt.meta!.title, yt.meta!.author ?? null) : null;
+  }, [links]);
+
   useEffect(() => {
-    if (!meta || touched) return;
-    const guess =
-      provider === "songsterr"
-        ? { title: meta.title ?? "", artist: meta.artist ?? "" }
-        : guessSongFromVideo(meta.title, meta.author ?? null);
+    if (!guess || touched) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSong((s) => ({ ...s, title: guess.title, artist: guess.artist }));
-    const dup = findDuplicates(views, guess.title, guess.artist)[0];
-    if (dup) {
-      setTarget("existing");
-      setExistingId(dup.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta]);
+  }, [guess, touched]);
 
   const duplicates = useMemo(
-    () => (saved ? [] : findDuplicates(views, song.title, song.artist)),
-    [views, song.title, song.artist, saved],
+    () => (saved || target !== "new" ? [] : findDuplicates(views, song.title, song.artist)),
+    [views, song.title, song.artist, saved, target],
   );
+  const dup = duplicates[0] && dismissedDup !== duplicates[0].id ? duplicates[0] : null;
   const existing = views.find((v) => v.id === existingId);
-  const canSave = target === "new" ? song.title.trim().length > 0 : Boolean(existingId);
+  const songsterr = links.find((l) => l.provider === "songsterr");
+  const canSave = target === "new" ? song.title.trim().length > 0 : Boolean(existingId) && links.length > 0;
 
   function save() {
+    if (!canSave) return;
     setSaved(true);
     let entryId: string;
     if (target === "new") {
-      entryId = createSong({
-        ...song,
-        songsterrUrl: provider === "songsterr" ? url : null,
-      });
+      entryId = createSong({ ...song, songsterrUrl: songsterr?.url ?? null });
     } else {
       entryId = existingId!;
-      if (provider === "songsterr") updateEntry(entryId, { songsterrUrl: url });
+      if (songsterr) updateEntry(entryId, { songsterrUrl: songsterr.url });
     }
-    if (provider !== "songsterr") {
+    for (const l of links) {
+      if (l.provider === "songsterr") continue;
       addResource(entryId, {
-        url,
-        type,
-        customLabel: label,
-        title: meta?.title ?? null,
-        author: meta?.author ?? null,
-        thumbnailUrl: meta?.thumbnailUrl ?? null,
-        durationSeconds: meta?.durationSeconds ?? null,
+        url: l.url,
+        type: l.type,
+        customLabel: l.label,
+        title: l.meta?.title ?? null,
+        author: l.meta?.author ?? null,
+        thumbnailUrl: l.meta?.thumbnailUrl ?? null,
+        durationSeconds: l.meta?.durationSeconds ?? null,
       });
     }
-    toast(target === "new" ? "Song added" : provider === "songsterr" ? "Songsterr link saved" : `${RESOURCE_LABEL[type]} added`);
+    toast(target === "new" ? "Song added" : `${links.length} link${links.length > 1 ? "s" : ""} added`);
     router.replace(`/song?id=${entryId}`);
   }
 
-  return (
-    <div className="form-grid mt-4" style={{ gap: 24 }}>
-      <div className="preview">
-        {ytId ? (
-          <Thumb src={meta?.thumbnailUrl ?? ytThumb(ytId)} title={meta?.title ?? "Video"}>
-            {meta?.durationSeconds != null && (
-              <div className="thumb-overlay" style={{ justifyContent: "flex-end" }}>
-                <span className="badge">{duration(meta.durationSeconds)}</span>
-              </div>
-            )}
-          </Thumb>
-        ) : (
-          <div className="res-icon" style={{ width: 150 }}>
-            {provider === "songsterr" ? <Guitar /> : <ExternalLink />}
-          </div>
-        )}
-        <div className="row-main">
-          {metaState === "loading" ? (
-            <>
-              <div className="skeleton-line" style={{ width: "90%" }} />
-              <div className="skeleton-line mt-2" style={{ width: "50%" }} />
-            </>
-          ) : (
-            <>
-              <span className="row-title clamp-2">
-                {provider === "songsterr" && meta?.title ? `${meta.title} — ${meta.artist}` : meta?.title || hostLabel(url)}
-              </span>
-              <span className="meta truncate">
-                {provider === "songsterr" ? "Songsterr tab" : meta?.author ?? (metaState === "failed" ? "Details will load later — you can save now" : "")}
-              </span>
-            </>
-          )}
-          <button type="button" className="meta" style={{ textAlign: "left", marginTop: 6, textDecoration: "underline" }} onClick={onReset}>
-            Use a different link
-          </button>
-        </div>
-      </div>
-
-      {provider !== "songsterr" && (
-        <>
-          <div className="field">
-            <span className="label">What is it?</span>
-            <CategoryChips value={type} onChange={setType} />
-          </div>
-          <div className="field">
-            <span className="label">Label</span>
-            <LabelInput value={label} onChange={setLabel} />
-          </div>
-        </>
-      )}
-
-      <div className="field">
-        <span className="label">Add to</span>
-        <div className="tabs" style={{ marginBottom: 4 }}>
-          <button type="button" className={`tab ${target === "new" ? "active" : ""}`} onClick={() => setTarget("new")}>
-            New song
-          </button>
-          <button type="button" className={`tab ${target === "existing" ? "active" : ""}`} onClick={() => setTarget("existing")} disabled={!views.length}>
-            Existing song
-          </button>
-        </div>
-        {target === "new" ? (
-          <NewSongFields
-            value={song}
-            onChange={(v) => {
-              setTouched(true);
-              setSong(v);
-            }}
-            duplicates={duplicates}
-            onUseExisting={(id) => {
-              setTarget("existing");
-              setExistingId(id);
-            }}
-          />
-        ) : (
-          <>
-            <SongPicker value={existingId} onChange={setExistingId} />
-            {provider === "songsterr" && existing?.entry.songsterrUrl && existing.entry.songsterrUrl !== url && (
-              <span className="hint">This replaces the Songsterr link already saved for {existing.song.title}.</span>
-            )}
-          </>
-        )}
-      </div>
-
-      <button className="btn btn-primary btn-lg btn-block" disabled={!canSave} onClick={save}>
-        Save
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function ManualFlow() {
-  const router = useRouter();
-  const views = useViews();
-  const defaults = useNewSongDefaults();
-  const [song, setSong] = useState<NewSongState>(defaults);
-  const [songsterr, setSongsterr] = useState("");
-  const [links, setLinks] = useState<{ url: string; type: ResourceType }[]>([]);
-  const [more, setMore] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const duplicates = useMemo(
-    () => (saved ? [] : findDuplicates(views, song.title, song.artist)),
-    [views, song.title, song.artist, saved],
-  );
-
-  function save() {
-    setSaved(true);
-    const entryId = createSong({ ...song, songsterrUrl: extractFirstUrl(songsterr) });
-    for (const l of links) {
-      const u = extractFirstUrl(l.url);
-      if (u) addResource(entryId, { url: u, type: l.type });
-    }
-    toast("Song added");
-    router.replace(`/song?id=${entryId}`);
-  }
-
-  return (
-    <div className="form-grid mt-4" style={{ gap: 20 }}>
-      <NewSongFields value={song} onChange={setSong} duplicates={duplicates} onUseExisting={(id) => router.push(`/song?id=${id}`)} />
-
-      <button type="button" className="disclosure" onClick={() => setMore((m) => !m)}>
-        {more ? <ChevronUp /> : <ChevronDown />}
-        Songsterr & YouTube links
-      </button>
-      {more && (
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor="m-ss">Songsterr link</label>
-            <input
-              id="m-ss"
-              className="input"
-              inputMode="url"
-              placeholder="https://www.songsterr.com/a/wsa/…"
-              value={songsterr}
-              onChange={(e) => setSongsterr(e.target.value)}
-            />
-          </div>
-          {links.map((l, i) => (
-            <div key={i} className="panel" style={{ padding: 14 }}>
-              <div className="row-gap">
-                <input
-                  className="input"
-                  inputMode="url"
-                  placeholder="YouTube link"
-                  value={l.url}
-                  onChange={(e) => setLinks(links.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
-                />
-                <button type="button" className="icon-btn sm muted" aria-label="Remove link" onClick={() => setLinks(links.filter((_, j) => j !== i))}>
-                  <Trash2 />
-                </button>
-              </div>
-              <div className="mt-3">
-                <CategoryChips value={l.type} onChange={(type) => setLinks(links.map((x, j) => (j === i ? { ...x, type } : x)))} />
-              </div>
-            </div>
-          ))}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => setLinks([...links, { url: "", type: links.length ? "guitar_cover" : "original" }])}
-          >
-            <Plus /> Add a YouTube link
-          </button>
-          <p className="hint">PDF and MIDI files can be attached from the song page after saving.</p>
-        </div>
-      )}
-
-      <button className="btn btn-primary btn-lg btn-block" disabled={!song.title.trim()} onClick={save}>
-        Save song
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-
-function Add() {
-  const params = useSearchParams();
-  // Share Target: YouTube shares the link in `text`, browsers in `url`.
-  const shared = extractFirstUrl(params.get("url")) ?? extractFirstUrl(params.get("text")) ?? extractFirstUrl(params.get("title"));
-  const [input, setInput] = useState(shared ?? "");
-  const [url, setUrl] = useState<string | null>(shared);
-  const [manual, setManual] = useState(params.get("manual") === "1" && !shared);
-  const [canPaste, setCanPaste] = useState(false);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCanPaste(typeof navigator !== "undefined" && !!navigator.clipboard?.readText);
-  }, []);
-
-  const submit = (value: string) => {
-    const u = extractFirstUrl(value);
-    if (u) {
-      setUrl(u);
-      setManual(false);
-    }
-  };
+  const set = (patch: Partial<NewSongState>) => setSong((s) => ({ ...s, ...patch }));
 
   return (
     <>
-      <TopBar back title="Add" />
+      <TopBar
+        back
+        title="Add"
+        actions={
+          <button className="btn btn-primary btn-sm" disabled={!canSave} onClick={save}>
+            Save
+          </button>
+        }
+      />
       <div className="container" style={{ maxWidth: 720 }}>
-        <form
-          className="paste-box mt-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            submit(input);
-          }}
-        >
-          <Link2 />
-          <input
-            placeholder="Paste a YouTube or Songsterr link"
-            value={input}
-            inputMode="url"
-            autoFocus={!shared && !manual}
-            onChange={(e) => {
-              setInput(e.target.value);
-              const u = extractFirstUrl(e.target.value);
-              if (u && u !== url) {
-                setUrl(u);
-                setManual(false);
-              }
+        {/* Links: paste one or many, each is detected and typed inline */}
+        <section className="add-block">
+          <form
+            className="paste-box"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addUrls(extractUrls(text));
+              setText("");
             }}
-          />
-          {canPaste && !input && (
-            <button
-              type="button"
-              className="btn btn-surface btn-sm"
-              onClick={async () => {
-                try {
-                  const text = await navigator.clipboard.readText();
-                  setInput(text);
-                  submit(text);
-                } catch {
-                  /* permission denied */
+          >
+            <Link2 />
+            <input
+              placeholder="Paste YouTube, Songsterr or any link"
+              value={text}
+              inputMode="url"
+              onChange={(e) => setText(e.target.value)}
+              onPaste={(e) => {
+                const urls = extractUrls(e.clipboardData.getData("text"));
+                if (urls.length) {
+                  e.preventDefault();
+                  addUrls(urls);
                 }
               }}
-            >
-              <ClipboardPaste /> Paste
-            </button>
+            />
+            {extractUrls(text).length > 0 && (
+              <button type="submit" className="btn btn-primary btn-sm">
+                Add
+              </button>
+            )}
+            {canPaste && !text && (
+              <button
+                type="button"
+                className="btn btn-surface btn-sm"
+                onClick={async () => {
+                  try {
+                    addUrls(extractUrls(await navigator.clipboard.readText()));
+                  } catch {
+                    /* permission denied */
+                  }
+                }}
+              >
+                <ClipboardPaste /> Paste
+              </button>
+            )}
+          </form>
+          {links.length > 0 && (
+            <div className="link-list">
+              {links.map((l) => (
+                <LinkCard
+                  key={l.key}
+                  item={l}
+                  onChange={(patch) => setLinks((ls) => ls.map((x) => (x.key === l.key ? { ...x, ...patch } : x)))}
+                  onRemove={() => setLinks((ls) => ls.filter((x) => x.key !== l.key))}
+                />
+              ))}
+            </div>
           )}
-        </form>
+          {!links.length && (
+            <p className="hint mt-2">Add as many links as you want: the Songsterr link becomes the tab, YouTube videos get a type.</p>
+          )}
+        </section>
 
-        {url ? (
-          <LinkFlow
-            key={url}
-            url={url}
-            onReset={() => {
-              setUrl(null);
-              setInput("");
-            }}
-          />
-        ) : manual ? (
-          <ManualFlow />
-        ) : (
-          <div className="mt-6">
-            <button className="panel" style={{ width: "100%", textAlign: "left" }} onClick={() => setManual(true)}>
-              <div className="row-gap" style={{ gap: 14 }}>
-                <span className="tag-icon">
-                  <Plus />
-                </span>
-                <span className="row-main">
-                  <span className="row-title">Add a song manually</span>
-                  <span className="meta">Name, artist, status and tuning. Everything else is optional.</span>
-                </span>
-              </div>
+        {/* Where the links go */}
+        <section className="add-block">
+          <div className="tabs" style={{ marginBottom: 8 }}>
+            <button type="button" className={`tab ${target === "new" ? "active" : ""}`} onClick={() => setTarget("new")}>
+              New song
             </button>
-            <p className="hint mt-4" style={{ textAlign: "center" }}>
-              Tip: on Android, install TuneDeck and use <strong>Share → TuneDeck</strong> from YouTube or Songsterr.
-            </p>
+            <button type="button" className={`tab ${target === "existing" ? "active" : ""}`} onClick={() => setTarget("existing")} disabled={!views.length}>
+              Existing song
+            </button>
           </div>
-        )}
+
+          {target === "existing" ? (
+            <>
+              <SongPicker value={existingId} onChange={setExistingId} />
+              {songsterr && existing?.entry.songsterrUrl && existing.entry.songsterrUrl !== songsterr.url && (
+                <span className="hint">This replaces the Songsterr link already saved for {existing.song.title}.</span>
+              )}
+              {!links.length && <span className="hint">Paste at least one link to add to an existing song.</span>}
+            </>
+          ) : (
+            <div className="form-grid">
+              <div className="form-2">
+                <div className="field">
+                  <label htmlFor="n-title">Song name</label>
+                  <input
+                    id="n-title"
+                    className="input"
+                    value={song.title}
+                    placeholder={links.some((l) => l.state === "loading") ? "Reading links…" : "Numb"}
+                    onChange={(e) => {
+                      setTouched(true);
+                      set({ title: e.target.value });
+                    }}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="n-artist">Artist</label>
+                  <input
+                    id="n-artist"
+                    className="input"
+                    value={song.artist}
+                    placeholder="Linkin Park"
+                    onChange={(e) => {
+                      setTouched(true);
+                      set({ artist: e.target.value });
+                    }}
+                  />
+                </div>
+              </div>
+
+              {dup && (
+                <DuplicateWarning
+                  dup={dup}
+                  onUse={() => {
+                    setTarget("existing");
+                    setExistingId(dup.id);
+                  }}
+                  onDismiss={() => setDismissedDup(dup.id)}
+                />
+              )}
+
+              <div className="field">
+                <span className="label">Status</span>
+                <StatusChips value={song.status} onChange={(status) => set({ status })} />
+              </div>
+              {song.instrument !== "piano" && (
+                <div className="field">
+                  <span className="label">Tuning</span>
+                  <TuningPicker value={song.tuning} onChange={(tuning) => set({ tuning })} />
+                </div>
+              )}
+              <div className="field">
+                <span className="label">Tags</span>
+                <TagPicker value={song.tagIds} onChange={(tagIds) => set({ tagIds })} />
+              </div>
+              <div className="field">
+                <span className="label">Instrument</span>
+                <InstrumentChips value={song.instrument} onChange={(instrument) => set({ instrument })} />
+              </div>
+            </div>
+          )}
+        </section>
+
+        <button className="btn btn-primary btn-lg btn-block mt-6" disabled={!canSave} onClick={save}>
+          {target === "new" ? "Save song" : "Add to song"}
+        </button>
+        <p className="hint mt-3" style={{ textAlign: "center" }}>
+          PDF and MIDI files can be attached on the song page. On Android, <strong>Share → TuneDeck</strong> lands here.
+        </p>
       </div>
     </>
   );

@@ -46,7 +46,7 @@ export function TopBar({
           {title ? (
             <h1 className="page-title truncate">{title}</h1>
           ) : brand ? (
-            <h1 className="page-title desktop-only">Home</h1>
+            <h1 className="page-title desktop-only">Library</h1>
           ) : null}
         </div>
         <SyncBadge />

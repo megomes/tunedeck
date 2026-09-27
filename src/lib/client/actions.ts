@@ -13,13 +13,19 @@ import type {
 import { STATUS_LABEL } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 import { api, dispatch, enrichResource, getState } from "./store";
-import { setActiveSong, toast } from "./ui";
+import { playVideo, setActiveSong, toast } from "./ui";
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
 
 function entry(id: string) {
   return getState().data.entries.find((e) => e.id === id);
+}
+
+/** Position that puts an entry at the top of a status column. */
+function topPosition(status: Status, except?: string) {
+  const col = getState().data.entries.filter((e) => e.status === status && e.id !== except);
+  return col.length ? Math.min(...col.map((e) => e.position ?? 0)) - 1 : 0;
 }
 
 export interface NewSongInput {
@@ -64,6 +70,7 @@ export function createSong(input: NewSongInput): string {
     playCount: 0,
     lastPlayedAt: null,
     isFavorite: false,
+    position: topPosition(input.status),
     createdAt: t,
     updatedAt: t,
   };
@@ -85,11 +92,22 @@ export function updateEntry(entryId: string, patch: Partial<Omit<Entry, "id" | "
   dispatch({ t: "entry.upsert", entry: { ...e, ...patch, updatedAt: now() } });
 }
 
+/** Moves a card on the board: new column and/or new manual position. */
+export function moveEntry(entryId: string, status: Status, position: number) {
+  const e = entry(entryId);
+  if (!e || (e.status === status && e.position === position)) return;
+  const prev = { status: e.status, position: e.position };
+  updateEntry(entryId, { status, position });
+  if (prev.status !== status) {
+    toast(`Moved to ${STATUS_LABEL[status]}`, { label: "Undo", run: () => updateEntry(entryId, prev) });
+  }
+}
+
+/** Status change from outside the board: the card lands at the top of its new column. */
 export function setStatus(entryId: string, status: Status) {
-  const prev = entry(entryId)?.status;
-  if (!prev || prev === status) return;
-  updateEntry(entryId, { status });
-  toast(`Moved to ${STATUS_LABEL[status]}`, { label: "Undo", run: () => updateEntry(entryId, { status: prev }) });
+  const e = entry(entryId);
+  if (!e || e.status === status) return;
+  moveEntry(entryId, status, topPosition(status, entryId));
 }
 
 export function toggleFavorite(entryId: string) {
@@ -185,10 +203,26 @@ export function setPrimaryResource(id: string) {
   dispatch({ t: "resource.setPrimary", id });
 }
 
-export function openExternal(url: string, entryId?: string) {
+/** Generic external link in a new tab; the song becomes "active" so coming back offers +1. */
+export function openLink(url: string, entryId?: string) {
   if (entryId) setActiveSong(entryId);
-  // A plain HTTPS link lets the OS hand Songsterr/YouTube links to the installed app.
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/**
+ * Songsterr is a straight redirect: a top-level navigation to the HTTPS URL lets the
+ * OS hand it to the installed Songsterr app (or opens the site). Back returns to TuneDeck.
+ */
+export function openSongsterr(url: string, entryId: string) {
+  setActiveSong(entryId);
+  window.location.assign(url);
+}
+
+/** YouTube resources play embedded in the app; anything else opens externally. */
+export function openResource(r: Resource) {
+  const online = typeof navigator === "undefined" || navigator.onLine;
+  if (r.provider === "youtube" && r.externalId && online) playVideo(r.id, r.repertoireEntryId);
+  else openLink(r.url, r.repertoireEntryId);
 }
 
 // ---------- Tags ----------

@@ -14,6 +14,14 @@ original / cover / lesson / backing track — one tap away. See [`tunedeck-produ
 
 ## How it works
 
+- **Board.** The Library is a kanban (`src/app/(app)/page.tsx`): Want to Play → Learning → Can Play →
+  Mastered → Archived. Drag cards between columns or reorder inside one (manual `position` per entry).
+  On phones: one column per screen, swipe between them, long-press to drag, or drop on the sticky
+  status pills to move a card to any column.
+- **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)
+  and minimize into a mini-player that keeps playing while you navigate. Songsterr links are a direct
+  redirect so the OS can hand them to the Songsterr app.
+
 - **Local-first data.** The client keeps a full snapshot in IndexedDB and renders from it instantly.
   Every change is an idempotent *op* (`src/lib/shared/types.ts`) applied optimistically by a shared
   reducer (`src/lib/shared/reduce.ts`) and queued. `POST /api/ops` replays the queue in one Neon batch;

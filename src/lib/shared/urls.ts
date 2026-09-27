@@ -100,3 +100,14 @@ export function normalizeKey(s: string): string {
     .replace(/^the\s+/, "")
     .replace(/[^a-z0-9]+/g, "");
 }
+
+/** Every link in a pasted blob (one per line, shared text, etc.), de-duplicated. */
+export function extractUrls(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const found = (text.match(/https?:\/\/[^\s<>"']+/gi) ?? []).map((u) => u.replace(/[),.;]+$/, ""));
+  if (!found.length) {
+    const single = extractFirstUrl(text);
+    return single ? [single] : [];
+  }
+  return Array.from(new Set(found));
+}

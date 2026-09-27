@@ -107,3 +107,49 @@ export function writePref(key: string, value: unknown) {
     /* ignore */
   }
 }
+
+// ---------- Embedded YouTube player ----------
+// One player lives in the app shell so playback survives navigation; it is either
+// expanded (full view) or minimized into the mini-player above the bottom nav.
+
+export interface PlayerState {
+  resourceId: string;
+  entryId: string;
+  expanded: boolean;
+}
+
+let player: PlayerState | null = null;
+const playerListeners = new Set<() => void>();
+
+function emitPlayer() {
+  playerListeners.forEach((l) => l());
+}
+
+export function playVideo(resourceId: string, entryId: string) {
+  player = { resourceId, entryId, expanded: true };
+  // The mini-player replaces the "played it?" dock for this song.
+  if (active === entryId) setActiveSong(null);
+  emitPlayer();
+}
+
+export function setPlayerExpanded(expanded: boolean) {
+  if (!player) return;
+  player = { ...player, expanded };
+  emitPlayer();
+}
+
+export function closePlayer() {
+  player = null;
+  emitPlayer();
+}
+
+export function usePlayer() {
+  return useSyncExternalStore(
+    (l) => {
+      playerListeners.add(l);
+      return () => playerListeners.delete(l);
+    },
+    () => player,
+    () => null,
+  );
+}

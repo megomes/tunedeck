@@ -1,19 +1,19 @@
 "use client";
 
-import { House, Library, Plus, Settings, Tags, X } from "lucide-react";
+import { Kanban, Plus, Settings, Tags, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { initStore, useStore } from "@/lib/client/store";
-import { dismissToast, setActiveSong, useActiveSong, useToasts } from "@/lib/client/ui";
+import { dismissToast, setActiveSong, useActiveSong, usePlayer, useToasts } from "@/lib/client/ui";
 import { useView } from "@/lib/client/views";
+import { Player } from "./Player";
 import { PlusOne } from "./PlusOne";
 import { SyncBadge } from "./SyncBadge";
 import { Thumb } from "./Thumb";
 
 const NAV = [
-  { href: "/", label: "Home", icon: House },
-  { href: "/library", label: "Library", icon: Library },
+  { href: "/", label: "Library", icon: Kanban },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -24,6 +24,7 @@ function isActive(pathname: string, href: string) {
   return pathname.startsWith(href);
 }
 
+/** After coming back from Songsterr or an external link: "Played it? +1". */
 function Dock() {
   const activeId = useActiveSong();
   const view = useView(activeId);
@@ -31,7 +32,7 @@ function Dock() {
   const params = useSearchParams();
   if (!view || (pathname === "/song" && params.get("id") === view.id)) return null;
   return (
-    <div className="dock" role="region" aria-label="Now playing">
+    <div className="dock" role="region" aria-label="Last opened song">
       <Link href={`/song?id=${view.id}`} style={{ display: "contents" }}>
         <Thumb src={view.thumb} title={view.song.title} />
         <div className="dock-text">
@@ -76,12 +77,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const ready = useStore((s) => s.ready);
   const authRequired = useStore((s) => s.authRequired);
   const activeId = useActiveSong();
-  const hasDock = Boolean(activeId);
+  const player = usePlayer();
+  const hasDock = Boolean(player) || Boolean(activeId);
 
   useEffect(() => {
     void initStore();
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if ("serviceWorker" in navigator) {
+      if (process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // In dev a leftover worker from a local prod build would serve stale pages.
+      else void navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
     }
   }, []);
 
@@ -113,29 +117,28 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <main className={`main ${hasDock ? "has-dock" : ""}`}>{ready ? children : null}</main>
 
-      <Suspense>
-        <Dock />
-      </Suspense>
+      <Player />
+      {!player && (
+        <Suspense>
+          <Dock />
+        </Suspense>
+      )}
       <Toaster raised={hasDock} />
 
       <nav className="bottom-nav" aria-label="Main">
-        {NAV.slice(0, 2).map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
-            <Icon />
-            {label}
-          </Link>
-        ))}
+        <Link href="/" className={`nav-item ${isActive(pathname, "/") ? "active" : ""}`}>
+          <Kanban />
+          Library
+        </Link>
         <div className="nav-add">
           <Link href="/add" aria-label="Add">
             <Plus />
           </Link>
         </div>
-        {NAV.slice(2).map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
-            <Icon />
-            {label}
-          </Link>
-        ))}
+        <Link href="/tags" className={`nav-item ${isActive(pathname, "/tags") ? "active" : ""}`}>
+          <Tags />
+          Tags
+        </Link>
       </nav>
     </div>
   );

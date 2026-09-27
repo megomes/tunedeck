@@ -21,7 +21,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Add song", url: "/add", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
-      { name: "Library", url: "/library", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
+      { name: "Library", url: "/", icons: [{ src: "/icons/icon-192.png", sizes: "192x192" }] },
     ],
     // Android: "Share → TuneDeck" from YouTube, Songsterr or the browser opens Quick Add.
     share_target: {
