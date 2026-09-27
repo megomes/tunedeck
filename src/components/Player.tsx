@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useData } from "@/lib/client/store";
-import { closePlayer, setPlayerExpanded, usePlayer } from "@/lib/client/ui";
+import { closePlayer, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
+import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
 import { RESOURCE_LABEL } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
@@ -16,6 +17,9 @@ import { Thumb } from "./Thumb";
 interface YTPlayer {
   loadVideoById(o: { videoId: string; startSeconds?: number }): void;
   setPlaybackRate(rate: number): void;
+  getCurrentTime(): number;
+  getDuration(): number;
+  getPlayerState(): number;
   destroy(): void;
 }
 interface YTNamespace {
@@ -26,7 +30,11 @@ interface YTNamespace {
       width?: string;
       height?: string;
       playerVars?: Record<string, number | string>;
-      events?: { onError?: (e: { data: number }) => void; onReady?: () => void };
+      events?: {
+        onError?: (e: { data: number }) => void;
+        onReady?: () => void;
+        onStateChange?: (e: { data: number }) => void;
+      };
     },
   ) => YTPlayer;
 }
@@ -66,6 +74,12 @@ function startSeconds(url: string) {
 }
 
 const SPEEDS = [0.5, 0.75, 1];
+const PLAYING = 1;
+
+function clock(sec: number) {
+  const s = Math.round(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
 
 export function Player() {
   const state = usePlayer();
@@ -78,6 +92,49 @@ export function Player() {
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
 
+  // --- auto +1 -------------------------------------------------------------
+  const take = useRef<Take>(newTake());
+  const entryRef = useRef<string | null>(null);
+  const [auto, setAuto] = useState(true);
+  const autoRef = useRef(true);
+  const [progress, setProgress] = useState({ watched: 0, threshold: 60, counted: false });
+  const [burst, setBurst] = useState(0);
+  useEffect(() => {
+    entryRef.current = state?.entryId ?? null;
+  }, [state?.entryId]);
+
+  useEffect(() => {
+    const on = readPref("autoPlus", true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAuto(on);
+    autoRef.current = on;
+  }, []);
+
+  const resetTake = () => {
+    take.current = newTake();
+    setProgress((p) => ({ ...p, watched: 0, counted: false }));
+  };
+
+  // Sample the playhead while playing; count a take once enough of it was really played.
+  useEffect(() => {
+    if (!state) return;
+    const id = setInterval(() => {
+      const p = yt.current;
+      if (!p || typeof p.getPlayerState !== "function" || p.getPlayerState() !== PLAYING) return;
+      const r = sample(take.current, p.getCurrentTime());
+      take.current = r.take;
+      const threshold = thresholdFor(p.getDuration() || resource?.durationSeconds);
+      if (!take.current.counted && take.current.watched >= threshold && autoRef.current && entryRef.current) {
+        take.current = { ...take.current, counted: true };
+        playedOnce(entryRef.current, { auto: true });
+        setBurst((b) => b + 1);
+      }
+      setProgress({ watched: take.current.watched, threshold, counted: take.current.counted });
+    }, 500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!state, resource?.durationSeconds]);
+
   const videoId = resource?.externalId ?? null;
   const expanded = state?.expanded ?? false;
 
@@ -87,6 +144,7 @@ export function Player() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
     const start = startSeconds(resource.url);
+    resetTake();
     if (yt.current) {
       yt.current.loadVideoById({ videoId, startSeconds: start });
       yt.current.setPlaybackRate(speed);
@@ -160,6 +218,19 @@ export function Player() {
 
       <div className="player-stage">
         <div className="player-video" ref={wrap} />
+        {burst > 0 && (
+          <div key={burst} className="autoplus" aria-hidden>
+            <span className="ring" />
+            <span className="ring r2" />
+            <span className="plus">+1</span>
+            <span className="caption">Counted</span>
+          </div>
+        )}
+        {auto && (
+          <div className={`take-bar ${progress.counted ? "done" : ""}`} aria-hidden>
+            <i style={{ width: `${Math.min(100, (progress.watched / progress.threshold) * 100)}%` }} />
+          </div>
+        )}
         {error && (
           <div className="player-error">
             <p>{error}</p>
@@ -182,7 +253,13 @@ export function Player() {
           </div>
 
           <div className="action-row">
-            <button className="btn btn-primary btn-lg big-plus" onClick={() => playedOnce(view.id)}>
+            <button
+              className="btn btn-primary btn-lg big-plus"
+              onClick={() => {
+                take.current = { ...take.current, counted: true };
+                playedOnce(view.id);
+              }}
+            >
               <Plus /> Played
             </button>
             {view.entry.songsterrUrl && (
@@ -209,6 +286,29 @@ export function Player() {
             <button className="chip sm" onClick={() => openLink(resource.url, view.id)} style={{ marginLeft: "auto" }}>
               <ExternalLink /> YouTube
             </button>
+          </div>
+
+          <div className="auto-row">
+            <button
+              className={`chip sm ${auto ? "active" : ""}`}
+              aria-pressed={auto}
+              onClick={() => {
+                const next = !auto;
+                setAuto(next);
+                autoRef.current = next;
+                writePref("autoPlus", next);
+              }}
+            >
+              <Sparkles /> Auto +1 {auto ? "on" : "off"}
+            </button>
+            <span className="meta">
+              {!auto
+                ? "Tap Played when you finish."
+                : progress.counted
+                  ? "Counted ✓ — rewind to play it again."
+                  : `Counts after ${clock(Math.max(0, progress.threshold - progress.watched))} more of playing. Skipping ahead doesn't count; rewinding starts a new take.`}
+            </span>
+            {auto && progress.counted && <Check size={16} color="var(--success)" />}
           </div>
 
           <Link href={`/song?id=${view.id}`} className="row" onClick={() => setPlayerExpanded(false)}>
@@ -258,7 +358,14 @@ export function Player() {
             <span className="dock-title truncate">{view.song.title}</span>
             <span className="meta truncate">{label}</span>
           </button>
-          <button className="plus-one" aria-label="Played once more" onClick={() => playedOnce(view.id)}>
+          <button
+            className="plus-one"
+            aria-label="Played once more"
+            onClick={() => {
+              take.current = { ...take.current, counted: true };
+              playedOnce(view.id);
+            }}
+          >
             <Plus />1
           </button>
           <button className="icon-btn sm muted" aria-label="Close player" onClick={closePlayer}>

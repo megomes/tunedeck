@@ -9,7 +9,14 @@ export const metadata: Metadata = {
   description: "Your personal repertoire cockpit — songs, tunings, tabs and videos in one tap.",
   applicationName: "TuneDeck",
   appleWebApp: { capable: true, title: "TuneDeck", statusBarStyle: "black-translucent" },
-  icons: { apple: "/icons/apple-touch-icon.png" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icons/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+  },
   formatDetection: { telephone: false },
 };
 

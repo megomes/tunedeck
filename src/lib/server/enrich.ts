@@ -121,14 +121,58 @@ export function parseSongsterrTitle(raw: string): { title: string; artist: strin
   return null;
 }
 
+const JSON_STR = String.raw`"((?:[^"\\]|\\.)*)"`;
+
+/**
+ * The song's own title/artist, as shown on the Songsterr page, from the embedded
+ * state (`"songId":499,"artist":"Green Day",…,"title":"Holiday"`). The HTML <title>
+ * is an SEO string that also names the default track ("Holiday Solo Tab by…"),
+ * so it is only a fallback.
+ */
+export function parseSongsterrState(html: string, songId: string | null): { title: string; artist: string } | null {
+  const decode = (raw: string) => {
+    try {
+      return JSON.parse(`"${raw}"`) as string;
+    } catch {
+      return raw;
+    }
+  };
+  const idPart = songId ?? String.raw`\d+`;
+  const re = new RegExp(String.raw`"songId":${idPart},"artist":${JSON_STR},"artistId":\d+,"title":${JSON_STR}`);
+  const m = html.match(re);
+  if (m) return { artist: decode(m[1]), title: decode(m[2]) };
+  // Field order can change: look for both fields close to the song id.
+  const at = songId ? html.indexOf(`"songId":${songId}`) : -1;
+  if (at >= 0) {
+    const win = html.slice(at, at + 600);
+    const artist = win.match(new RegExp(`"artist":${JSON_STR}`))?.[1];
+    const title = win.match(new RegExp(`"title":${JSON_STR}`))?.[1];
+    if (artist && title) return { artist: decode(artist), title: decode(title) };
+  }
+  return null;
+}
+
+/** Drops the track descriptor Songsterr adds to SEO titles ("Holiday Solo" → "Holiday"). */
+function stripTrackWord(title: string) {
+  return title.replace(/\s+(Solo|Lead|Rhythm|Acoustic|Guitar|Bass|Drums?|Vocals?|Keys|Piano)$/i, "");
+}
+
 async function songsterr(url: string): Promise<SongsterrMeta | null> {
   const res = await fetchWithTimeout(url);
   if (!res.ok) return null;
   const html = await res.text();
+  const songId = url.match(/-s(\d+)(?:t\d+)?(?:[/?#]|$)/)?.[1] ?? null;
+  const state = parseSongsterrState(html, songId);
+  if (state) return { provider: "songsterr", url, ...state };
   const og = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
   const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
   const parsed = (og && parseSongsterrTitle(og)) || (title && parseSongsterrTitle(title)) || null;
-  return { provider: "songsterr", url, title: parsed?.title ?? null, artist: parsed?.artist ?? null };
+  return {
+    provider: "songsterr",
+    url,
+    title: parsed ? stripTrackWord(parsed.title) : null,
+    artist: parsed?.artist ?? null,
+  };
 }
 
 export async function enrichUrl(url: string): Promise<Meta | null> {
@@ -141,7 +185,7 @@ export async function enrichUrl(url: string): Promise<Meta | null> {
   }
   if (isSongsterr(url)) {
     const clean = url.split("#")[0];
-    return cached<SongsterrMeta>(`ss:${clean}`, () => songsterr(clean));
+    return cached<SongsterrMeta>(`ss2:${clean}`, () => songsterr(clean));
   }
   return null;
 }

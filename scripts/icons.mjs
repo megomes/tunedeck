@@ -24,6 +24,29 @@ for (const size of [192, 512]) {
   await sharp({ create: { width: 180, height: 180, channels: 4, background: "#0A0A0A" } })
     .composite([{ input: logo, gravity: "center" }]).png().toFile("public/icons/apple-touch-icon.png");
 }
-await sharp(trimmed).resize(64, 64).png().toFile("src/app/icon.png");
+// favicon.ico with embedded PNGs (what Firefox and most browsers look for first).
+{
+  const sizes = [16, 32, 48];
+  const pngs = await Promise.all(sizes.map((n) => sharp(trimmed).resize(n, n).png().toBuffer()));
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(sizes.length, 4);
+  let offset = 6 + 16 * sizes.length;
+  const entries = sizes.map((n, i) => {
+    const e = Buffer.alloc(16);
+    e.writeUInt8(n, 0);
+    e.writeUInt8(n, 1);
+    e.writeUInt16LE(1, 4);
+    e.writeUInt16LE(32, 6);
+    e.writeUInt32LE(pngs[i].length, 8);
+    e.writeUInt32LE(offset, 12);
+    offset += pngs[i].length;
+    return e;
+  });
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile("public/favicon.ico", Buffer.concat([header, ...entries, ...pngs]));
+}
+await sharp(trimmed).resize(32, 32).png().toFile("public/icons/favicon-32.png");
 await sharp(trimmed).resize(96, 96).png().toFile("public/icons/logo-96.png");
 console.log("done");

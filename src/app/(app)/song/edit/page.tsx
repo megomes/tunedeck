@@ -3,6 +3,7 @@
 import { Archive, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
+import { DifficultyInput } from "@/components/Difficulty";
 import { InstrumentChips, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
 import { TopBar } from "@/components/TopBar";
 import { LoadingList } from "@/components/Loading";
@@ -133,18 +134,7 @@ function EditForm({ view }: { view: SongView }) {
           </div>
           <div className="field">
             <span className="label">Difficulty</span>
-            <div className="segmented">
-              {[1, 2, 3, 4, 5].map((d) => (
-                <button
-                  type="button"
-                  key={d}
-                  className={`chip sm ${difficulty === d ? "active" : ""}`}
-                  onClick={() => setDifficulty(difficulty === d ? null : d)}
-                >
-                  {d} · {["Easy", "Moderate", "Intermediate", "Hard", "Expert"][d - 1]}
-                </button>
-              ))}
-            </div>
+            <DifficultyInput value={difficulty} onChange={setDifficulty} />
           </div>
 
           <div className="action-row mt-6">

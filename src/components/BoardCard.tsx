@@ -6,6 +6,7 @@ import type { CSSProperties, HTMLAttributes, Ref } from "react";
 import { openResource, openSongsterr } from "@/lib/client/actions";
 import { timeAgo } from "@/lib/client/format";
 import { primaryOf, type SongView } from "@/lib/client/views";
+import { DifficultyMeter } from "./Difficulty";
 import { PlusOne } from "./PlusOne";
 import { Thumb } from "./Thumb";
 
@@ -101,6 +102,7 @@ export function BoardCard({
         </span>
         <span className="secondary truncate">{song.artist || "Unknown artist"}</span>
         <span className="card-meta">
+          <DifficultyMeter value={entry.difficulty} />
           {entry.playCount ? `${entry.playCount}× · ${timeAgo(entry.lastPlayedAt)}` : "Not played yet"}
         </span>
       </div>

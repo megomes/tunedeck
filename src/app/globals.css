@@ -2657,3 +2657,335 @@ button.fact:hover {
   height: 15px;
   stroke-width: 2.2;
 }
+
+/* ---------- Difficulty 0–5 ---------- */
+
+.difficulty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.diff-zero {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--background-tertiary);
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  transition: background var(--duration-fast) var(--ease), color var(--duration-fast) var(--ease);
+}
+.diff-zero.on {
+  background: var(--text-primary);
+  color: var(--background-primary);
+}
+.diff-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 34px;
+  padding-bottom: 2px;
+}
+.diff-bar {
+  width: 16px;
+  border-radius: 4px;
+  background: var(--surface-active);
+  transition: background var(--duration-fast) var(--ease), transform var(--duration-fast) var(--ease);
+  /* taller invisible hit area for thumbs */
+  position: relative;
+}
+.diff-bar::after {
+  content: "";
+  position: absolute;
+  inset: -10px -3px;
+}
+.diff-bar:hover {
+  background: #4a4a4a;
+}
+.diff-bar:active {
+  transform: scaleY(0.9);
+}
+.diff-bar.on {
+  background: var(--accent);
+}
+.diff-text {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  font-size: 15px;
+}
+.diff-mini {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 1.5px;
+  height: 11px;
+  margin-right: 7px;
+  flex-shrink: 0;
+}
+.diff-mini i {
+  width: 3px;
+  border-radius: 1px;
+  background: #3a3a3a;
+}
+.diff-mini i.on {
+  background: var(--accent);
+}
+.bcard-main .card-meta {
+  align-items: flex-end;
+}
+
+/* ---------- Auto +1 ---------- */
+
+.take-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  z-index: 2;
+}
+.take-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 500ms linear, background var(--duration-normal) var(--ease);
+}
+.take-bar.done i {
+  background: var(--success);
+}
+.auto-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.auto-row .meta {
+  flex: 1;
+  line-height: 1.35;
+}
+
+/* Celebration when the video counts a play by itself */
+.autoplus {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: autoplus-bg 1.9s var(--ease) forwards;
+}
+.autoplus .plus {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  box-shadow: 0 10px 40px rgba(255, 45, 45, 0.55);
+  animation: autoplus-pop 1.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.autoplus .caption {
+  grid-area: 1 / 1;
+  margin-top: 132px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+  animation: autoplus-caption 1.9s var(--ease) forwards;
+}
+.autoplus .ring {
+  grid-area: 1 / 1;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: autoplus-ring 1.1s var(--ease) forwards;
+}
+.autoplus .ring.r2 {
+  animation-delay: 0.18s;
+  opacity: 0;
+}
+.player.mini .autoplus .plus {
+  width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+.player.mini .autoplus .ring {
+  width: 40px;
+  height: 40px;
+}
+.player.mini .autoplus .caption {
+  display: none;
+}
+@keyframes autoplus-bg {
+  0% {
+    background: rgba(10, 10, 10, 0);
+  }
+  15%,
+  70% {
+    background: rgba(10, 10, 10, 0.45);
+  }
+  100% {
+    background: rgba(10, 10, 10, 0);
+  }
+}
+@keyframes autoplus-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1);
+  }
+  75% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-28px) scale(0.9);
+    opacity: 0;
+  }
+}
+@keyframes autoplus-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+@keyframes autoplus-caption {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  35%,
+  75% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .autoplus,
+  .autoplus .plus,
+  .autoplus .ring,
+  .autoplus .caption {
+    animation-duration: 1ms;
+  }
+}
+
+/* ---------- Song page: video + links on the left, details on the right (desktop) ---------- */
+
+@media (max-width: 1023px) {
+  .detail-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-main,
+  .detail-side {
+    display: contents;
+  }
+  .hero {
+    order: 1;
+  }
+  .song-head {
+    order: 2;
+  }
+  .detail-res {
+    order: 3;
+  }
+  .detail-extra {
+    order: 4;
+  }
+  .song-head,
+  .detail-res,
+  .detail-extra {
+    padding: 0 var(--gutter);
+  }
+}
+@media (min-width: 1024px) {
+  .detail-side {
+    padding: 0 var(--gutter) 0 0;
+  }
+  .detail-res {
+    padding-left: var(--gutter);
+  }
+  .detail-res .section {
+    margin-top: 20px;
+  }
+}
+
+/* Compact resource list: type badge instead of group headings */
+.res-group + .res-group {
+  margin-top: 2px;
+}
+.res-group .list {
+  gap: 2px;
+}
+.res-badges {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-bottom: 3px;
+}
+.res-badges .res-label {
+  margin-bottom: 0;
+}
+.res-type {
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 7px;
+  border-radius: var(--radius-xs);
+  background: var(--background-elevated);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.res-type.original {
+  background: var(--text-primary);
+  color: var(--background-primary);
+}
+.res-type.primary {
+  background: transparent;
+  color: var(--text-tertiary);
+  padding: 0 2px;
+}
+.res-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.res-item {
+  padding: 6px;
+}
+.res-item .thumb,
+.res-item .res-icon {
+  width: 112px;
+}
+@media (max-width: 400px) {
+  .res-item .thumb,
+  .res-item .res-icon {
+    width: 92px;
+  }
+}

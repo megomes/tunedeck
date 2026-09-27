@@ -18,7 +18,7 @@ import {
 import { duration } from "@/lib/client/format";
 import { usePlayer } from "@/lib/client/ui";
 import { primaryOf, type SongView } from "@/lib/client/views";
-import { RESOURCE_LABEL, RESOURCE_TYPES, type Resource, type ResourceType } from "@/lib/shared/types";
+import { RESOURCE_LABEL, RESOURCE_SHORT, RESOURCE_TYPES, type Resource, type ResourceType } from "@/lib/shared/types";
 import { detectProvider, extractFirstUrl, hostLabel } from "@/lib/shared/urls";
 import { CategoryChips, LabelInput } from "./Pickers";
 import { Thumb } from "./Thumb";
@@ -90,7 +90,11 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
             </div>
           )}
           <span className="row-main" style={{ textAlign: "left" }}>
-            {r.customLabel && <span className="res-label truncate">{r.customLabel}</span>}
+            <span className="res-badges">
+              <span className={`res-type ${r.type}`}>{RESOURCE_SHORT[r.type]}</span>
+              {isPrimary && showStar && <span className="res-type primary">★ Primary</span>}
+              {r.customLabel && <span className="res-label truncate">{r.customLabel}</span>}
+            </span>
             {loading ? (
               <>
                 <span className="skeleton-line" style={{ width: "80%" }} />
@@ -98,9 +102,7 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
               </>
             ) : (
               <>
-                <span className="row-title clamp-2" style={{ fontSize: 14, fontWeight: 500 }}>
-                  {r.title || hostLabel(r.url)}
-                </span>
+                <span className="res-title clamp-2">{r.title || hostLabel(r.url)}</span>
                 <span className="meta truncate">
                   {playing ? "Playing now" : r.author || hostLabel(r.url)}
                   {r.metaStatus === "failed" && " · details unavailable"}
@@ -140,11 +142,7 @@ function Group({ view, type, list }: { view: SongView; type: ResourceType; list:
     reorderResources(view.id, arrayMove(ids, ids.indexOf(String(e.active.id)), ids.indexOf(String(e.over.id))));
   };
   return (
-    <div className="res-group">
-      <div className="res-group-head">
-        <h3>{RESOURCE_LABEL[type]}</h3>
-        {list.length > 1 && <span className="meta">★ plays first</span>}
-      </div>
+    <div className="res-group" aria-label={RESOURCE_LABEL[type]}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={list.map((r) => r.id)} strategy={verticalListSortingStrategy}>
           <div className="list">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { AttachmentsSection } from "@/components/Attachments";
+import { DifficultyInput } from "@/components/Difficulty";
 import { playableOf } from "@/components/BoardCard";
 import { LoadingList } from "@/components/Loading";
 import { ResourcesSection } from "@/components/Resources";
@@ -230,6 +231,7 @@ function SongDetail() {
         />
       </div>
       <div className="container detail-layout" style={{ paddingLeft: 0, paddingRight: 0 }}>
+        <div className="detail-main">
         <div className="hero">
           <div className="hero-bar">
             <button className="icon-btn" aria-label="Back" onClick={back}>
@@ -251,6 +253,10 @@ function SongDetail() {
               </Thumb>
             </button>
           </div>
+        </div>
+        <div className="detail-res">
+          <ResourcesSection view={view} />
+        </div>
         </div>
 
         <div className="detail-side">
@@ -309,15 +315,20 @@ function SongDetail() {
               </div>
             )}
             <div className="inline-field">
+              <span className="label">Difficulty</span>
+              <DifficultyInput value={entry.difficulty} onChange={(difficulty) => updateEntry(view.id, { difficulty })} />
+            </div>
+            <div className="inline-field">
               <span className="label">Tags</span>
               <TagRow view={view} />
             </div>
           </div>
 
-          <ResourcesSection view={view} />
-          <AttachmentsSection view={view} />
-          <History view={view} />
-          <div style={{ height: 24 }} />
+          <div className="detail-extra">
+            <AttachmentsSection view={view} />
+            <History view={view} />
+            <div style={{ height: 24 }} />
+          </div>
         </div>
       </div>
     </>

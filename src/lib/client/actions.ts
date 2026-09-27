@@ -120,15 +120,16 @@ export function deleteEntry(entryId: string) {
 }
 
 /** +1 played: no confirmation, instant undo. */
-export function playedOnce(entryId: string) {
+export function playedOnce(entryId: string, opts: { auto?: boolean } = {}) {
   const event = { id: uuid(), repertoireEntryId: entryId, playedAt: now() };
   dispatch({ t: "play.add", event });
   setActiveSong(null);
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(12);
-  toast("Played ✓", {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(opts.auto ? [12, 60, 12] : 12);
+  toast(opts.auto ? "+1 counted from the video ✓" : "Played ✓", {
     label: "Undo",
     run: () => dispatch({ t: "play.delete", id: event.id, entryId }),
   });
+  return event.id;
 }
 
 export function deletePlay(id: string, entryId: string) {
