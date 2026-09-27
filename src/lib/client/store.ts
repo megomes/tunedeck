@@ -3,7 +3,7 @@
 import { del, get, set } from "idb-keyval";
 import { useSyncExternalStore } from "react";
 import { applyOp } from "@/lib/shared/reduce";
-import { EMPTY_SNAPSHOT, type Op, type QueuedOp, type Resource, type Snapshot } from "@/lib/shared/types";
+import { EMPTY_SNAPSHOT, type JamTrack, type Op, type QueuedOp, type Resource, type Snapshot } from "@/lib/shared/types";
 
 export type SyncStatus = "idle" | "syncing" | "offline" | "error";
 
@@ -251,9 +251,42 @@ export async function enrichResource(resourceId: string) {
   }
 }
 
+export async function enrichJam(trackId: string) {
+  const key = `jam:${trackId}`;
+  if (enriching.has(key) || !isOnline()) return;
+  const tr = state.data.jamTracks.find((x) => x.id === trackId);
+  if (!tr) return;
+  enriching.add(key);
+  try {
+    const res = await api("/api/enrich", { method: "POST", body: JSON.stringify({ url: tr.url }) });
+    const current = state.data.jamTracks.find((x) => x.id === trackId);
+    if (!current) return;
+    if (res.ok) {
+      const meta = await res.json();
+      const next: JamTrack = {
+        ...current,
+        title: current.title && current.title !== current.url ? current.title : (meta.title ?? current.title),
+        author: current.author || meta.author,
+        thumbnailUrl: meta.thumbnailUrl ?? current.thumbnailUrl,
+        durationSeconds: meta.durationSeconds ?? current.durationSeconds,
+        metaStatus: "ok",
+        updatedAt: new Date().toISOString(),
+      };
+      dispatch({ t: "jam.upsert", track: next });
+    } else if (res.status === 404 || res.status === 502) {
+      dispatch({ t: "jam.upsert", track: { ...current, metaStatus: "failed" } });
+    }
+  } catch {
+    /* retried after the next sync */
+  } finally {
+    enriching.delete(key);
+  }
+}
+
 async function enrichPending() {
   const pending = state.data.resources.filter((r) => r.provider === "youtube" && r.metaStatus === "pending");
   for (const r of pending.slice(0, 10)) await enrichResource(r.id);
+  for (const t of state.data.jamTracks.filter((x) => x.metaStatus === "pending").slice(0, 10)) await enrichJam(t.id);
 }
 
 export async function fetchMeta(url: string) {

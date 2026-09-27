@@ -3,6 +3,7 @@
 import type {
   Attachment,
   Entry,
+  JamTrack,
   Instrument,
   Resource,
   ResourceType,
@@ -12,8 +13,8 @@ import type {
 } from "@/lib/shared/types";
 import { STATUS_LABEL } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
-import { api, dispatch, enrichResource, getState } from "./store";
-import { playVideo, setActiveSong, toast } from "./ui";
+import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
+import { playJam, playVideo, setActiveSong, toast } from "./ui";
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
@@ -292,4 +293,95 @@ export function updateAttachment(id: string, patch: Partial<Attachment>) {
 
 export function deleteAttachment(id: string) {
   dispatch({ t: "attachment.delete", id });
+}
+
+// ---------- Jam backing tracks ----------
+
+export interface JamInput {
+  url: string;
+  title: string;
+  author?: string | null;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  musicalKey: string | null;
+  bpm: number | null;
+  style: string | null;
+  timeSignature: string | null;
+  notes: string | null;
+}
+
+function jam(id: string) {
+  return getState().data.jamTracks.find((t) => t.id === id);
+}
+
+export function createJam(input: JamInput): string {
+  const url = normalizeUrl(input.url);
+  const videoId = youtubeId(url);
+  const t = now();
+  const track: JamTrack = {
+    id: uuid(),
+    url,
+    videoId,
+    title: input.title.trim() || url,
+    author: input.author ?? null,
+    thumbnailUrl: input.thumbnailUrl ?? (videoId ? ytThumb(videoId) : null),
+    durationSeconds: input.durationSeconds ?? null,
+    musicalKey: input.musicalKey,
+    bpm: input.bpm,
+    style: input.style?.trim() || null,
+    timeSignature: input.timeSignature,
+    notes: input.notes?.trim() || null,
+    isFavorite: false,
+    playCount: 0,
+    lastPlayedAt: null,
+    metaStatus: input.author || input.durationSeconds ? "ok" : videoId ? "pending" : "none",
+    createdAt: t,
+    updatedAt: t,
+  };
+  dispatch({ t: "jam.upsert", track });
+  if (track.metaStatus === "pending") void enrichJam(track.id);
+  return track.id;
+}
+
+export function updateJam(id: string, patch: Partial<Omit<JamTrack, "id" | "createdAt">>) {
+  const tr = jam(id);
+  if (tr) dispatch({ t: "jam.upsert", track: { ...tr, ...patch, updatedAt: now() } });
+}
+
+export function toggleJamFavorite(id: string) {
+  const tr = jam(id);
+  if (tr) updateJam(id, { isFavorite: !tr.isFavorite });
+}
+
+export function deleteJam(id: string) {
+  const tr = jam(id);
+  if (!tr) return;
+  const plays = getState().data.jamPlays.filter((p) => p.trackId === id);
+  dispatch({ t: "jam.delete", id });
+  toast("Backing track removed", {
+    label: "Undo",
+    run: () => dispatch({ t: "jam.upsert", track: tr }, ...plays.map((play) => ({ t: "jamPlay.add" as const, play }))),
+  });
+}
+
+export function jamPlayed(trackId: string, opts: { auto?: boolean } = {}) {
+  const play = { id: uuid(), trackId, playedAt: now() };
+  dispatch({ t: "jamPlay.add", play });
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate?.(opts.auto ? [12, 60, 12] : 12);
+  toast(opts.auto ? "Jam counted from the video ✓" : "Jammed ✓", {
+    label: "Undo",
+    run: () => dispatch({ t: "jamPlay.delete", id: play.id, trackId }),
+  });
+}
+
+export function deleteJamPlay(id: string, trackId: string) {
+  dispatch({ t: "jamPlay.delete", id, trackId });
+}
+
+export function playJamTrack(id: string) {
+  const tr = jam(id);
+  if (!tr) return;
+  const online = typeof navigator === "undefined" || navigator.onLine;
+  if (tr.videoId && online) playJam(id);
+  else openLink(tr.url);
 }

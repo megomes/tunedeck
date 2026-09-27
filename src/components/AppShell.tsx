@@ -1,6 +1,6 @@
 "use client";
 
-import { Kanban, Plus, Settings, Tags, X } from "lucide-react";
+import { AudioLines, Kanban, Plus, Settings, Tags, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
@@ -14,6 +14,7 @@ import { Thumb } from "./Thumb";
 
 const NAV = [
   { href: "/", label: "Library", icon: Kanban },
+  { href: "/jam", label: "Jam", icon: AudioLines },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
@@ -79,6 +80,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const activeId = useActiveSong();
   const player = usePlayer();
   const hasDock = Boolean(player) || Boolean(activeId);
+  const inJam = pathname.startsWith("/jam");
+  const addHref = inJam ? "/jam/add" : "/add";
 
   useEffect(() => {
     void initStore();
@@ -101,8 +104,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img src="/icons/logo-96.png" alt="" />
           TuneDeck
         </Link>
-        <Link href="/add" className="btn btn-primary">
-          <Plus /> Add
+        <Link href={addHref} className="btn btn-primary">
+          <Plus /> {inJam ? "Add backing track" : "Add"}
         </Link>
         {NAV.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={`side-item ${isActive(pathname, href) ? "active" : ""}`}>
@@ -126,19 +129,23 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Toaster raised={hasDock} />
 
       <nav className="bottom-nav" aria-label="Main">
-        <Link href="/" className={`nav-item ${isActive(pathname, "/") ? "active" : ""}`}>
-          <Kanban />
-          Library
-        </Link>
+        {NAV.slice(0, 2).map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
+            <Icon />
+            {label}
+          </Link>
+        ))}
         <div className="nav-add">
-          <Link href="/add" aria-label="Add">
+          <Link href={addHref} aria-label={inJam ? "Add backing track" : "Add song"}>
             <Plus />
           </Link>
         </div>
-        <Link href="/tags" className={`nav-item ${isActive(pathname, "/tags") ? "active" : ""}`}>
-          <Tags />
-          Tags
-        </Link>
+        {NAV.slice(2).map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
+            <Icon />
+            {label}
+          </Link>
+        ))}
       </nav>
     </div>
   );

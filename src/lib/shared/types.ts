@@ -150,6 +150,35 @@ export interface Attachment {
   createdAt: string;
 }
 
+/** A backing track to jam over: one YouTube video plus musical info. */
+export interface JamTrack {
+  id: string;
+  url: string;
+  videoId: string | null;
+  title: string;
+  author: string | null;
+  thumbnailUrl: string | null;
+  durationSeconds: number | null;
+  /** e.g. "A minor", "E major", "D dorian" */
+  musicalKey: string | null;
+  bpm: number | null;
+  style: string | null;
+  timeSignature: string | null;
+  notes: string | null;
+  isFavorite: boolean;
+  playCount: number;
+  lastPlayedAt: string | null;
+  metaStatus: MetaStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface JamPlay {
+  id: string;
+  trackId: string;
+  playedAt: string;
+}
+
 export interface Settings {
   defaultInstrument?: Instrument;
   defaultStatus?: Status;
@@ -165,6 +194,8 @@ export interface Snapshot {
   entryTags: EntryTag[];
   playEvents: PlayEvent[];
   attachments: Attachment[];
+  jamTracks: JamTrack[];
+  jamPlays: JamPlay[];
   settings: Settings;
 }
 
@@ -176,6 +207,8 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   entryTags: [],
   playEvents: [],
   attachments: [],
+  jamTracks: [],
+  jamPlays: [],
   settings: {},
 };
 
@@ -198,7 +231,11 @@ export type Op =
   | { t: "play.delete"; id: string; entryId: string }
   | { t: "attachment.upsert"; attachment: Attachment }
   | { t: "attachment.delete"; id: string }
-  | { t: "setting.set"; key: string; value: unknown };
+  | { t: "setting.set"; key: string; value: unknown }
+  | { t: "jam.upsert"; track: JamTrack }
+  | { t: "jam.delete"; id: string }
+  | { t: "jamPlay.add"; play: JamPlay }
+  | { t: "jamPlay.delete"; id: string; trackId: string };
 
 export interface QueuedOp {
   qid: string;

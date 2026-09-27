@@ -22,6 +22,8 @@ export const POST = withSession(async (req) => {
       tagIds: (data.entryTags ?? []).filter((t) => t.repertoireEntryId === e.id).map((t) => t.tagId),
     }) as Op),
     ...(data.playEvents ?? []).map((event) => ({ t: "play.add", event }) as Op),
+    ...(data.jamTracks ?? []).map((track) => ({ t: "jam.upsert", track }) as Op),
+    ...(data.jamPlays ?? []).map((play) => ({ t: "jamPlay.add", play }) as Op),
     ...Object.entries(data.settings ?? {}).map(([key, value]) => ({ t: "setting.set", key, value }) as Op),
   ];
   let applied = 0;

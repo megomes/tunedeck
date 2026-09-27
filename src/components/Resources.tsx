@@ -62,7 +62,7 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: r.id });
   const [editing, setEditing] = useState(false);
   const player = usePlayer();
-  const playing = player?.resourceId === r.id;
+  const playing = player?.kind === "resource" && player.resourceId === r.id;
   const loading = r.metaStatus === "pending" && !r.title;
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={isDragging ? "dragging" : ""}>

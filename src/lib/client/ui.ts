@@ -112,11 +112,9 @@ export function writePref(key: string, value: unknown) {
 // One player lives in the app shell so playback survives navigation; it is either
 // expanded (full view) or minimized into the mini-player above the bottom nav.
 
-export interface PlayerState {
-  resourceId: string;
-  entryId: string;
-  expanded: boolean;
-}
+export type PlayerState =
+  | { kind: "resource"; resourceId: string; entryId: string; expanded: boolean }
+  | { kind: "jam"; trackId: string; expanded: boolean };
 
 let player: PlayerState | null = null;
 const playerListeners = new Set<() => void>();
@@ -125,8 +123,13 @@ function emitPlayer() {
   playerListeners.forEach((l) => l());
 }
 
+export function playJam(trackId: string) {
+  player = { kind: "jam", trackId, expanded: true };
+  emitPlayer();
+}
+
 export function playVideo(resourceId: string, entryId: string) {
-  player = { resourceId, entryId, expanded: true };
+  player = { kind: "resource", resourceId, entryId, expanded: true };
   // The mini-player replaces the "played it?" dock for this song.
   if (active === entryId) setActiveSong(null);
   emitPlayer();

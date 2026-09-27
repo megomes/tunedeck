@@ -5,15 +5,25 @@ import { db, schema } from "@/db";
 import type { Op, Settings, Snapshot } from "@/lib/shared/types";
 import { deleteObject } from "./s3";
 
-const { songs, repertoireEntries: entries, resources, tags, repertoireTags, playEvents, attachments, appSettings } =
-  schema;
+const {
+  songs,
+  repertoireEntries: entries,
+  resources,
+  tags,
+  repertoireTags,
+  playEvents,
+  attachments,
+  appSettings,
+  jamTracks,
+  jamPlays,
+} = schema;
 
 const iso = (v: string | null) => (v ? new Date(v).toISOString() : null);
 const isoReq = (v: string) => new Date(v).toISOString();
 
 export async function loadSnapshot(): Promise<Snapshot> {
   const d = db();
-  const [s, e, r, t, et, p, a, st] = await d.batch([
+  const [s, e, r, t, et, p, a, st, jt, jp] = await d.batch([
     d.select().from(songs),
     d.select().from(entries),
     d.select().from(resources),
@@ -22,6 +32,8 @@ export async function loadSnapshot(): Promise<Snapshot> {
     d.select().from(playEvents),
     d.select().from(attachments),
     d.select().from(appSettings),
+    d.select().from(jamTracks),
+    d.select().from(jamPlays),
   ]);
   const settings: Settings = {};
   for (const row of st) settings[row.key] = row.value;
@@ -51,8 +63,26 @@ export async function loadSnapshot(): Promise<Snapshot> {
       type: x.type as Snapshot["attachments"][number]["type"],
       createdAt: isoReq(x.createdAt),
     })),
+    jamTracks: jt.map((x) => ({
+      ...x,
+      metaStatus: x.metaStatus as Snapshot["jamTracks"][number]["metaStatus"],
+      lastPlayedAt: iso(x.lastPlayedAt),
+      createdAt: isoReq(x.createdAt),
+      updatedAt: isoReq(x.updatedAt),
+    })),
+    jamPlays: jp.map((x) => ({ ...x, playedAt: isoReq(x.playedAt) })),
     settings,
   };
+}
+
+function recomputeJam(trackId: string): Query {
+  return db()
+    .update(jamTracks)
+    .set({
+      playCount: sql`(select count(*)::int from ${jamPlays} where ${jamPlays.trackId} = ${trackId})`,
+      lastPlayedAt: sql`(select max(${jamPlays.playedAt}) from ${jamPlays} where ${jamPlays.trackId} = ${trackId})`,
+    })
+    .where(eq(jamTracks.id, trackId));
 }
 
 type Query = BatchItem<"pg">;
@@ -174,6 +204,22 @@ async function opToQueries(op: Op, afterCommit: (() => Promise<void>)[]): Promis
       if (row) afterCommit.push(() => deleteObject(row.storageKey));
       return [d.delete(attachments).where(eq(attachments.id, op.id))];
     }
+    case "jam.upsert": {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, createdAt, playCount, lastPlayedAt, ...rest } = op.track;
+      return [
+        d.insert(jamTracks)
+          .values({ ...rest, id, createdAt, playCount: 0, lastPlayedAt: null, updatedAt: now })
+          .onConflictDoUpdate({ target: jamTracks.id, set: { ...rest, updatedAt: now } }),
+        recomputeJam(id),
+      ];
+    }
+    case "jam.delete":
+      return [d.delete(jamTracks).where(eq(jamTracks.id, op.id))];
+    case "jamPlay.add":
+      return [d.insert(jamPlays).values(op.play).onConflictDoNothing(), recomputeJam(op.play.trackId)];
+    case "jamPlay.delete":
+      return [d.delete(jamPlays).where(eq(jamPlays.id, op.id)), recomputeJam(op.trackId)];
     case "setting.set":
       return [
         d.insert(appSettings)

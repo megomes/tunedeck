@@ -15,6 +15,13 @@
       "when": 1790537008786,
       "tag": "0001_board_position",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790538950918,
+      "tag": "0002_jam",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, ClipboardPaste, ExternalLink, Guitar, Link2, LoaderCircle, Play, Search, X } from "lucide-react";
+import { AlertTriangle, AudioLines, ClipboardPaste, ExternalLink, Guitar, Link2, LoaderCircle, Play, Search, X } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { InstrumentChips, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
@@ -392,6 +393,11 @@ function Add() {
                 />
               ))}
             </div>
+          )}
+          {links.some((l) => l.provider === "youtube") && (
+            <Link href={`/jam/add?url=${encodeURIComponent(links.find((l) => l.provider === "youtube")!.url)}`} className="jam-hint">
+              <AudioLines size={16} /> Is this a backing track to jam over? <strong>Save it in Jam →</strong>
+            </Link>
           )}
           {!links.length && (
             <p className="hint mt-2">Add as many links as you want: the Songsterr link becomes the tab, YouTube videos get a type.</p>

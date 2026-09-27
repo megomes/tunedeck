@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ClipboardPaste, Library, Plus, Search, Settings, X } from "lucide-react";
+import { ClipboardPaste, Library, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -320,16 +320,11 @@ function Board() {
     if (searchOpen) searchRef.current?.focus();
   }, [searchOpen]);
 
-  const settingsLink = (
-    <Link href="/settings" className="icon-btn mobile-only" aria-label="Settings">
-      <Settings />
-    </Link>
-  );
 
   if (!loaded) {
     return (
       <>
-        <TopBar brand actions={settingsLink} />
+        <TopBar brand />
         <LoadingList />
       </>
     );
@@ -337,7 +332,7 @@ function Board() {
   if (!views.length) {
     return (
       <>
-        <TopBar brand actions={settingsLink} />
+        <TopBar brand />
         <Welcome />
       </>
     );
@@ -369,7 +364,6 @@ function Board() {
             >
               {searchOpen ? <X /> : <Search />}
             </button>
-            {settingsLink}
           </>
         }
       />

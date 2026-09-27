@@ -1,4 +1,4 @@
-import type { Entry, Op, PlayEvent, Snapshot } from "./types";
+import type { Entry, JamPlay, JamTrack, Op, PlayEvent, Snapshot } from "./types";
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
   const i = list.findIndex((x) => x.id === item.id);
@@ -12,6 +12,12 @@ function recomputePlays(entries: Entry[], events: PlayEvent[], entryId: string):
   const own = events.filter((e) => e.repertoireEntryId === entryId);
   const last = own.reduce<string | null>((m, e) => (!m || e.playedAt > m ? e.playedAt : m), null);
   return entries.map((e) => (e.id === entryId ? { ...e, playCount: own.length, lastPlayedAt: last } : e));
+}
+
+function recomputeJam(tracks: JamTrack[], plays: JamPlay[], trackId: string): JamTrack[] {
+  const own = plays.filter((p) => p.trackId === trackId);
+  const last = own.reduce<string | null>((m, p) => (!m || p.playedAt > m ? p.playedAt : m), null);
+  return tracks.map((t) => (t.id === trackId ? { ...t, playCount: own.length, lastPlayedAt: last } : t));
 }
 
 /** Pure reducer used for optimistic updates and for rebasing queued ops on top of server state. */
@@ -113,5 +119,30 @@ export function applyOp(s: Snapshot, op: Op): Snapshot {
 
     case "setting.set":
       return { ...s, settings: { ...s.settings, [op.key]: op.value } };
+
+    case "jam.upsert": {
+      const tracks = s.jamTracks ?? [];
+      const prev = tracks.find((t) => t.id === op.track.id);
+      const track = prev ? { ...op.track, playCount: prev.playCount, lastPlayedAt: prev.lastPlayedAt } : op.track;
+      return { ...s, jamTracks: upsert(tracks, track) };
+    }
+
+    case "jam.delete":
+      return {
+        ...s,
+        jamTracks: (s.jamTracks ?? []).filter((t) => t.id !== op.id),
+        jamPlays: (s.jamPlays ?? []).filter((p) => p.trackId !== op.id),
+      };
+
+    case "jamPlay.add": {
+      if (!(s.jamTracks ?? []).some((t) => t.id === op.play.trackId)) return s;
+      const jamPlays = upsert(s.jamPlays ?? [], op.play);
+      return { ...s, jamPlays, jamTracks: recomputeJam(s.jamTracks, jamPlays, op.play.trackId) };
+    }
+
+    case "jamPlay.delete": {
+      const jamPlays = (s.jamPlays ?? []).filter((p) => p.id !== op.id);
+      return { ...s, jamPlays, jamTracks: recomputeJam(s.jamTracks ?? [], jamPlays, op.trackId) };
+    }
   }
 }

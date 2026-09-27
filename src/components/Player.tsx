@@ -3,7 +3,7 @@
 import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
+import { jamPlayed, openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useData } from "@/lib/client/store";
 import { closePlayer, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
@@ -11,6 +11,7 @@ import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
 import { RESOURCE_LABEL } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
+import { scaleSuggestions } from "@/lib/shared/music";
 import { Thumb } from "./Thumb";
 
 // Minimal typing for the YouTube IFrame Player API.
@@ -81,11 +82,89 @@ function clock(sec: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** What the player needs, whether it plays a song resource or a jam backing track. */
+interface Media {
+  key: string;
+  videoId: string | null;
+  url: string;
+  title: string;
+  author: string | null;
+  durationSeconds: number | null;
+  label: string;
+  miniTitle: string;
+  played: (auto: boolean) => void;
+}
+
+function JamInfo({ trackId }: { trackId: string }) {
+  const data = useData();
+  const t = data.jamTracks.find((x) => x.id === trackId);
+  if (!t) return null;
+  const scales = scaleSuggestions(t.musicalKey);
+  const facts = [t.musicalKey, t.bpm ? `${t.bpm} BPM` : null, t.timeSignature, t.style].filter(Boolean);
+  return (
+    <div className="jam-info">
+      {facts.length > 0 && (
+        <div className="segmented">
+          {facts.map((f) => (
+            <span key={f} className="chip sm">
+              {f}
+            </span>
+          ))}
+        </div>
+      )}
+      {scales.length > 0 && (
+        <div>
+          <p className="step-title">Try these scales</p>
+          <div className="scale-list">
+            {scales.map((s, i) => (
+              <span key={s} className={`scale ${i === 0 ? "first" : ""}`}>
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {t.notes && <p className="secondary" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{t.notes}</p>}
+      <p className="meta" style={{ margin: 0 }}>
+        Jammed {t.playCount}×{t.playCount ? ` · last ${new Date(t.lastPlayedAt!).toLocaleDateString()}` : ""}
+      </p>
+    </div>
+  );
+}
+
 export function Player() {
   const state = usePlayer();
   const data = useData();
-  const view = useView(state?.entryId ?? null);
-  const resource = data.resources.find((r) => r.id === state?.resourceId) ?? null;
+  const view = useView(state?.kind === "resource" ? state.entryId : null);
+  const resource = state?.kind === "resource" ? (data.resources.find((r) => r.id === state.resourceId) ?? null) : null;
+  const jam = state?.kind === "jam" ? (data.jamTracks.find((t) => t.id === state.trackId) ?? null) : null;
+
+  const media: Media | null =
+    resource && view
+      ? {
+          key: resource.id,
+          videoId: resource.externalId,
+          url: resource.url,
+          title: resource.title || view.song.title,
+          author: resource.author,
+          durationSeconds: resource.durationSeconds,
+          label: resource.customLabel || RESOURCE_LABEL[resource.type],
+          miniTitle: view.song.title,
+          played: (auto) => playedOnce(view.id, { auto }),
+        }
+      : jam
+        ? {
+            key: jam.id,
+            videoId: jam.videoId,
+            url: jam.url,
+            title: jam.title,
+            author: jam.author,
+            durationSeconds: jam.durationSeconds,
+            label: ["Jam", jam.musicalKey, jam.bpm ? `${jam.bpm} BPM` : null].filter(Boolean).join(" · "),
+            miniTitle: jam.title,
+            played: (auto) => jamPlayed(jam.id, { auto }),
+          }
+        : null;
 
   const wrap = useRef<HTMLDivElement>(null);
   const yt = useRef<YTPlayer | null>(null);
@@ -94,14 +173,15 @@ export function Player() {
 
   // --- auto +1 -------------------------------------------------------------
   const take = useRef<Take>(newTake());
-  const entryRef = useRef<string | null>(null);
+  const playedRef = useRef<Media["played"] | null>(null);
   const [auto, setAuto] = useState(true);
   const autoRef = useRef(true);
   const [progress, setProgress] = useState({ watched: 0, threshold: 60, counted: false });
   const [burst, setBurst] = useState(0);
+
   useEffect(() => {
-    entryRef.current = state?.entryId ?? null;
-  }, [state?.entryId]);
+    playedRef.current = media?.played ?? null;
+  });
 
   useEffect(() => {
     const on = readPref("autoPlus", true);
@@ -115,6 +195,11 @@ export function Player() {
     setProgress((p) => ({ ...p, watched: 0, counted: false }));
   };
 
+  const markPlayed = () => {
+    take.current = { ...take.current, counted: true };
+    media?.played(false);
+  };
+
   // Sample the playhead while playing; count a take once enough of it was really played.
   useEffect(() => {
     if (!state) return;
@@ -123,27 +208,27 @@ export function Player() {
       if (!p || typeof p.getPlayerState !== "function" || p.getPlayerState() !== PLAYING) return;
       const r = sample(take.current, p.getCurrentTime());
       take.current = r.take;
-      const threshold = thresholdFor(p.getDuration() || resource?.durationSeconds);
-      if (!take.current.counted && take.current.watched >= threshold && autoRef.current && entryRef.current) {
+      const threshold = thresholdFor(p.getDuration() || media?.durationSeconds);
+      if (!take.current.counted && take.current.watched >= threshold && autoRef.current && playedRef.current) {
         take.current = { ...take.current, counted: true };
-        playedOnce(entryRef.current, { auto: true });
+        playedRef.current(true);
         setBurst((b) => b + 1);
       }
       setProgress({ watched: take.current.watched, threshold, counted: take.current.counted });
     }, 500);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!state, resource?.durationSeconds]);
+  }, [!!state, media?.durationSeconds]);
 
-  const videoId = resource?.externalId ?? null;
+  const videoId = media?.videoId ?? null;
   const expanded = state?.expanded ?? false;
 
-  // Create the player once per session; later tracks reuse it so switching versions is instant.
+  // Create the player once per session; later tracks reuse it so switching is instant.
   useEffect(() => {
-    if (!videoId || !resource) return;
+    if (!videoId || !media) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
-    const start = startSeconds(resource.url);
+    const start = startSeconds(media.url);
     resetTake();
     if (yt.current) {
       yt.current.loadVideoById({ videoId, startSeconds: start });
@@ -173,7 +258,7 @@ export function Player() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, resource?.id]);
+  }, [videoId, media?.key]);
 
   // Tear down when the player is closed.
   useEffect(() => {
@@ -195,10 +280,7 @@ export function Player() {
     };
   }, [expanded]);
 
-  if (!state || !resource || !view) return null;
-
-  const versions = view.resources;
-  const label = resource.customLabel || RESOURCE_LABEL[resource.type];
+  if (!state || !media) return null;
 
   return (
     <div className={`player ${expanded ? "expanded" : "mini"}`} role="region" aria-label="Video player">
@@ -208,7 +290,7 @@ export function Player() {
             <ChevronDown />
           </button>
           <span className="grow meta" style={{ textAlign: "center" }}>
-            {label}
+            {media.label}
           </span>
           <button className="icon-btn" aria-label="Close player" onClick={closePlayer}>
             <X />
@@ -234,7 +316,7 @@ export function Player() {
         {error && (
           <div className="player-error">
             <p>{error}</p>
-            <button className="btn btn-primary btn-sm" onClick={() => openLink(resource.url, view.id)}>
+            <button className="btn btn-primary btn-sm" onClick={() => openLink(media.url, view?.id)}>
               <ExternalLink /> Open on YouTube
             </button>
           </div>
@@ -245,24 +327,16 @@ export function Player() {
         <div className="player-body">
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-              {resource.title || view.song.title}
+              {media.title}
             </h2>
-            <div className="meta mt-2">
-              {[resource.author, duration(resource.durationSeconds)].filter(Boolean).join(" · ")}
-            </div>
+            <div className="meta mt-2">{[media.author, duration(media.durationSeconds)].filter(Boolean).join(" · ")}</div>
           </div>
 
           <div className="action-row">
-            <button
-              className="btn btn-primary btn-lg big-plus"
-              onClick={() => {
-                take.current = { ...take.current, counted: true };
-                playedOnce(view.id);
-              }}
-            >
-              <Plus /> Played
+            <button className="btn btn-primary btn-lg big-plus" onClick={markPlayed}>
+              <Plus /> {jam ? "Jammed" : "Played"}
             </button>
-            {view.entry.songsterrUrl && (
+            {view?.entry.songsterrUrl && (
               <button className="btn btn-surface btn-lg" onClick={() => openSongsterr(view.entry.songsterrUrl!, view.id)}>
                 <Guitar /> Tab
               </button>
@@ -283,7 +357,7 @@ export function Player() {
                 {s === 1 ? "1×" : `${s}×`}
               </button>
             ))}
-            <button className="chip sm" onClick={() => openLink(resource.url, view.id)} style={{ marginLeft: "auto" }}>
+            <button className="chip sm" onClick={() => openLink(media.url, view?.id)} style={{ marginLeft: "auto" }}>
               <ExternalLink /> YouTube
             </button>
           </div>
@@ -303,7 +377,7 @@ export function Player() {
             </button>
             <span className="meta">
               {!auto
-                ? "Tap Played when you finish."
+                ? `Tap ${jam ? "Jammed" : "Played"} when you finish.`
                 : progress.counted
                   ? "Counted ✓ — rewind to play it again."
                   : `Counts after ${clock(Math.max(0, progress.threshold - progress.watched))} more of playing. Skipping ahead doesn't count; rewinding starts a new take.`}
@@ -311,61 +385,56 @@ export function Player() {
             {auto && progress.counted && <Check size={16} color="var(--success)" />}
           </div>
 
-          <Link href={`/song?id=${view.id}`} className="row" onClick={() => setPlayerExpanded(false)}>
-            <Thumb src={view.thumb} title={view.song.title} />
-            <span className="row-main">
-              <span className="row-title truncate">{view.song.title}</span>
-              <span className="meta truncate">{view.song.artist}</span>
-            </span>
-          </Link>
+          {jam && <JamInfo trackId={jam.id} />}
 
-          {versions.length > 1 && (
-            <div>
-              <p className="step-title">Versions</p>
-              <div className="list">
-                {versions.map((r) => (
-                  <button
-                    key={r.id}
-                    className={`pick ${r.id === resource.id ? "active" : ""}`}
-                    onClick={() => openResource(r)}
-                  >
-                    <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
-                      {r.id === resource.id && (
-                        <div className="thumb-overlay" style={{ justifyContent: "center", alignItems: "center", inset: 0 }}>
-                          <span className="badge accent">
-                            <Play /> Playing
+          {view && resource && (
+            <>
+              <Link href={`/song?id=${view.id}`} className="row" onClick={() => setPlayerExpanded(false)}>
+                <Thumb src={view.thumb} title={view.song.title} />
+                <span className="row-main">
+                  <span className="row-title truncate">{view.song.title}</span>
+                  <span className="meta truncate">{view.song.artist}</span>
+                </span>
+              </Link>
+
+              {view.resources.length > 1 && (
+                <div>
+                  <p className="step-title">Versions</p>
+                  <div className="list">
+                    {view.resources.map((r) => (
+                      <button key={r.id} className={`pick ${r.id === resource.id ? "active" : ""}`} onClick={() => openResource(r)}>
+                        <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
+                          {r.id === resource.id && (
+                            <div className="thumb-overlay" style={{ justifyContent: "center", alignItems: "center", inset: 0 }}>
+                              <span className="badge accent">
+                                <Play /> Playing
+                              </span>
+                            </div>
+                          )}
+                        </Thumb>
+                        <span className="row-main">
+                          <span className="res-label" style={{ alignSelf: "flex-start" }}>
+                            {r.customLabel || RESOURCE_LABEL[r.type]}
                           </span>
-                        </div>
-                      )}
-                    </Thumb>
-                    <span className="row-main">
-                      <span className="res-label" style={{ alignSelf: "flex-start" }}>
-                        {r.customLabel || RESOURCE_LABEL[r.type]}
-                      </span>
-                      <span className="row-title truncate" style={{ fontWeight: 500, fontSize: 13.5 }}>
-                        {r.title || hostLabel(r.url)}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+                          <span className="row-title truncate" style={{ fontWeight: 500, fontSize: 13.5 }}>
+                            {r.title || hostLabel(r.url)}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (
         <>
           <button className="player-mini-text" onClick={() => setPlayerExpanded(true)}>
-            <span className="dock-title truncate">{view.song.title}</span>
-            <span className="meta truncate">{label}</span>
+            <span className="dock-title truncate">{media.miniTitle}</span>
+            <span className="meta truncate">{media.label}</span>
           </button>
-          <button
-            className="plus-one"
-            aria-label="Played once more"
-            onClick={() => {
-              take.current = { ...take.current, counted: true };
-              playedOnce(view.id);
-            }}
-          >
+          <button className="plus-one" aria-label="Played once more" onClick={markPlayed}>
             <Plus />1
           </button>
           <button className="icon-btn sm muted" aria-label="Close player" onClick={closePlayer}>

@@ -7,6 +7,7 @@ const KNOWN = new Set<Op["t"]>([
   "song.upsert", "entry.upsert", "entry.delete", "resource.upsert", "resource.delete",
   "resource.reorder", "resource.setPrimary", "tag.upsert", "tag.delete", "entry.setTags",
   "play.add", "play.delete", "attachment.upsert", "attachment.delete", "setting.set",
+  "jam.upsert", "jam.delete", "jamPlay.add", "jamPlay.delete",
 ]);
 
 export const POST = withSession(async (req) => {

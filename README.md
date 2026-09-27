@@ -35,6 +35,11 @@ original / cover / lesson / backing track — one tap away. See [`tunedeck-produ
 - **Songsterr** is just a canonical HTTPS link (opens the app when installed). Pasting one best-effort
   reads the page title to prefill song/artist.
 
+- **Jam.** A separate library of YouTube backing tracks (`/jam`) with key, tempo, style and meter
+  (read from the video title when possible, plus tap tempo). Filter by key/tempo/style, sort by plays,
+  "Surprise me" picks a random one (favouring the least played), and the player suggests scales for the key.
+  Jams are counted like songs: manually or automatically from the embedded player.
+
 ## Local development
 
 ```bash

@@ -155,3 +155,40 @@ export const mediaCache = pgTable(
   },
 );
 
+
+/** Backing tracks to jam over: one YouTube video plus musical info. No progress, just plays. */
+export const jamTracks = pgTable(
+  "jam_tracks",
+  {
+    id: uuid("id").primaryKey(),
+    url: text("url").notNull(),
+    videoId: text("video_id"),
+    title: text("title").notNull(),
+    author: text("author"),
+    thumbnailUrl: text("thumbnail_url"),
+    durationSeconds: integer("duration_seconds"),
+    musicalKey: text("musical_key"),
+    bpm: integer("bpm"),
+    style: text("style"),
+    timeSignature: text("time_signature"),
+    notes: text("notes"),
+    isFavorite: boolean("is_favorite").notNull().default(false),
+    playCount: integer("play_count").notNull().default(0),
+    lastPlayedAt: ts("last_played_at"),
+    metaStatus: text("meta_status").notNull().default("none"),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+);
+
+export const jamPlays = pgTable(
+  "jam_plays",
+  {
+    id: uuid("id").primaryKey(),
+    trackId: uuid("track_id")
+      .notNull()
+      .references(() => jamTracks.id, { onDelete: "cascade" }),
+    playedAt: ts("played_at").notNull().defaultNow(),
+  },
+  (t) => [index("jam_plays_track_idx").on(t.trackId, t.playedAt)],
+);
