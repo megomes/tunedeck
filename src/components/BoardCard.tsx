@@ -8,6 +8,7 @@ import { timeAgo } from "@/lib/client/format";
 import { primaryOf, type SongView } from "@/lib/client/views";
 import { DifficultyMeter } from "./Difficulty";
 import { PlusOne } from "./PlusOne";
+import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
 /** The video the thumbnail plays: primary original, else the first YouTube resource. */
@@ -67,6 +68,7 @@ export function BoardCard({
           }}
         >
           <Thumb src={view.thumb} title={song.title}>
+            {video && <SourceBadge videoId={video.externalId} />}
             {video && (
               <span className="bcard-play" aria-hidden>
                 <Play fill="currentColor" />

@@ -15,6 +15,7 @@ import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
 import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
+import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
 // Minimal typing for the YouTube IFrame Player API.
@@ -448,6 +449,7 @@ export function Player() {
                     {view.resources.map((r) => (
                       <button key={r.id} className={`pick ${r.id === resource.id ? "active" : ""}`} onClick={() => openResource(r)}>
                         <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
+                          {r.provider === "youtube" && <SourceBadge videoId={r.externalId} />}
                           {r.id === resource.id && (
                             <div className="thumb-overlay" style={{ justifyContent: "center", alignItems: "center", inset: 0 }}>
                               <span className="badge accent">

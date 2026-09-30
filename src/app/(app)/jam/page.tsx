@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoadingList } from "@/components/Loading";
+import { SourceBadge } from "@/components/SourceBadge";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
 import { jamPlayed, playJamTrack, toggleJamFavorite } from "@/lib/client/actions";
@@ -37,6 +38,7 @@ function JamCard({ t }: { t: JamTrack }) {
       <div className="bcard-thumb">
         <div className="bcard-thumb-hit">
           <Thumb src={t.thumbnailUrl} title={t.title}>
+            <SourceBadge videoId={t.videoId} />
             <span className="bcard-play" aria-hidden>
               <Play fill="currentColor" />
             </span>

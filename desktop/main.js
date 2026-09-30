@@ -414,16 +414,51 @@ function spawnLogged(cmd, args, onLine) {
     child.stdout.on("data", feed);
     child.stderr.on("data", feed);
     child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error(tail.trim().split(/\r?\n/).filter(Boolean).slice(-3).join(" ") || `${cmd} exited with ${code}`)),
-    );
+    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(errorFrom(tail) || `${cmd} exited with ${code}`))));
   });
 }
 
+/** The line that explains a failure, without tool noise like Python deprecation notices. */
+function errorFrom(output) {
+  const lines = output
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^Deprecated Feature/i.test(l));
+  return lines.find((l) => l.startsWith("ERROR")) ?? lines.slice(-2).join(" ");
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// YouTube sometimes answers 403 for a while (expired links, throttling). Try again with a fresh
+// extraction, and as a last resort take the 360p single-file format, which is rarely blocked.
+const BEST = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b";
+const ATTEMPTS = [
+  { wait: 0, format: BEST, step: "Downloading from YouTube" },
+  { wait: 8_000, format: BEST, step: "Retrying download" },
+  { wait: 20_000, format: "18/b[ext=mp4]/b", step: "Retrying in lower quality (360p)" },
+];
+
 async function download(job) {
+  let lastError = null;
+  for (const attempt of ATTEMPTS) {
+    if (attempt.wait) {
+      const why = /403/.test(lastError?.message ?? "") ? "YouTube refused (403)" : "Download failed";
+      setJob(job, { state: "downloading", progress: 0, step: `${why}, trying again…` });
+      await sleep(attempt.wait);
+    }
+    try {
+      return await downloadOnce(job, attempt.format, attempt.step);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+async function downloadOnce(job, format, step) {
   const tmp = ensureDir(path.join(videosDir(), ".tmp"));
   for (const f of fs.readdirSync(tmp)) if (f.startsWith(`${job.videoId}.src`)) fs.rmSync(path.join(tmp, f), { force: true });
-  setJob(job, { state: "downloading", progress: 0, step: "Downloading from YouTube" });
+  setJob(job, { state: "downloading", progress: 0, step });
   let stream = -1;
   let final = null;
   await spawnLogged(
@@ -432,9 +467,13 @@ async function download(job) {
       "--newline",
       "--no-playlist",
       "--no-mtime",
+      "--retries",
+      "5",
+      "--fragment-retries",
+      "5",
       // H.264 + AAC up to 720p plays on every phone and tablet without re-encoding.
       "-f",
-      "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b",
+      format,
       "--merge-output-format",
       "mp4",
       "-o",

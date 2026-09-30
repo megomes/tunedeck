@@ -21,6 +21,7 @@ import { primaryOf, type SongView } from "@/lib/client/views";
 import { RESOURCE_LABEL, RESOURCE_SHORT, RESOURCE_TYPES, type Resource, type ResourceType } from "@/lib/shared/types";
 import { detectProvider, extractFirstUrl, hostLabel } from "@/lib/shared/urls";
 import { CategoryChips, LabelInput } from "./Pickers";
+import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
 function EditPanel({ r, onDone }: { r: Resource; onDone: () => void }) {
@@ -73,6 +74,7 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
         <button onClick={() => openResource(r)} className="res-open">
           {r.thumbnailUrl ? (
             <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
+              {r.provider === "youtube" && <SourceBadge videoId={r.externalId} />}
               {r.provider === "youtube" && (
                 <span className="bcard-play" aria-hidden>
                   <Play fill="currentColor" />

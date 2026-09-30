@@ -3435,3 +3435,28 @@ button.fact:hover {
 .transfer.error .meta {
   color: var(--accent);
 }
+
+/* Where a video plays from on phones/tablets: saved on the device or YouTube. */
+.src-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.68);
+  pointer-events: none;
+}
+.src-badge svg {
+  width: 15px;
+  height: 15px;
+}
+.src-badge.local {
+  background: var(--success);
+  color: #06140d;
+}
