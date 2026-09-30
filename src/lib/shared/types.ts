@@ -1,8 +1,8 @@
 export const INSTRUMENTS = ["guitar", "bass", "piano"] as const;
 export type Instrument = (typeof INSTRUMENTS)[number];
 
-/** Board order: backlog → in progress → done. */
-export const STATUSES = ["WANT_TO_PLAY", "LEARNING", "CAN_PLAY", "MASTERED", "ARCHIVED"] as const;
+/** Board order: want → in progress → done, then the parked columns on the far right. */
+export const STATUSES = ["WANT_TO_PLAY", "LEARNING", "CAN_PLAY", "MASTERED", "ARCHIVED", "BACKLOG"] as const;
 export type Status = (typeof STATUSES)[number];
 
 export const RESOURCE_TYPES = [
@@ -40,6 +40,7 @@ export const STATUS_LABEL: Record<Status, string> = {
   CAN_PLAY: "Can Play",
   MASTERED: "Mastered",
   ARCHIVED: "Archived",
+  BACKLOG: "Backlog",
 };
 
 export const RESOURCE_LABEL: Record<ResourceType, string> = {

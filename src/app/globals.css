@@ -704,6 +704,10 @@ img {
 .status-badge[data-status="ARCHIVED"]::before {
   background: var(--text-disabled);
 }
+.status-badge[data-status="BACKLOG"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-tertiary);
+}
 
 /* ---------- Sections & carousels ---------- */
 
@@ -2089,7 +2093,8 @@ button.fact:hover {
   background: #1a1a1a;
   box-shadow: inset 0 0 0 1.5px rgba(255, 45, 45, 0.45);
 }
-.board-col[data-status="ARCHIVED"] {
+.board-col[data-status="ARCHIVED"],
+.board-col[data-status="BACKLOG"] {
   background: #111;
 }
 @media (min-width: 640px) {
