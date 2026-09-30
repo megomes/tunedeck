@@ -429,3 +429,8 @@ async function onMessage(data: unknown) {
     }
   }
 }
+
+/** True when this phone/tablet has the original of a video, so it can play without internet. */
+export function hasLocalVideo(videoId: string) {
+  return state.handheld && Boolean(state.videos[videoKey(videoId, 0)]);
+}

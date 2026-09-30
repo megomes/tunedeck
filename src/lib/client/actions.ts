@@ -13,6 +13,7 @@ import type {
 } from "@/lib/shared/types";
 import { STATUS_LABEL } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
+import { hasLocalVideo } from "./offline";
 import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
 import { playJam, playVideo, setActiveSong, toast } from "./ui";
 
@@ -223,7 +224,8 @@ export function openSongsterr(url: string, entryId: string) {
 /** YouTube resources play embedded in the app; anything else opens externally. */
 export function openResource(r: Resource) {
   const online = typeof navigator === "undefined" || navigator.onLine;
-  if (r.provider === "youtube" && r.externalId && online) playVideo(r.id, r.repertoireEntryId);
+  // Offline, a video saved on the device still plays in the app; anything else opens the link.
+  if (r.provider === "youtube" && r.externalId && (online || hasLocalVideo(r.externalId))) playVideo(r.id, r.repertoireEntryId);
   else openLink(r.url, r.repertoireEntryId);
 }
 
@@ -382,6 +384,6 @@ export function playJamTrack(id: string) {
   const tr = jam(id);
   if (!tr) return;
   const online = typeof navigator === "undefined" || navigator.onLine;
-  if (tr.videoId && online) playJam(id);
+  if (tr.videoId && (online || hasLocalVideo(tr.videoId))) playJam(id);
   else openLink(tr.url);
 }
