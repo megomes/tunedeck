@@ -1,0 +1,203 @@
+:root {
+  --bg: #0a0a0a;
+  --card: #151515;
+  --line: #262626;
+  --input: #202020;
+  --text: #f5f5f5;
+  --muted: #8a8a8a;
+  --accent: #ff2d2d;
+  --ok: #4cc38a;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+header img {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+h1 {
+  font-size: 18px;
+  margin: 0;
+  flex: 1;
+}
+h2 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2a2a2a;
+  color: var(--muted);
+}
+.pill.ok {
+  background: rgba(76, 195, 138, 0.15);
+  color: var(--ok);
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.item.done strong {
+  color: var(--muted);
+  font-weight: 500;
+}
+.item.error .small {
+  color: #ff8080;
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.muted {
+  color: var(--muted);
+  margin: 0;
+}
+.small {
+  font-size: 12px;
+}
+.bar {
+  height: 4px;
+  border-radius: 2px;
+  background: #303030;
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s linear;
+}
+.tools {
+  margin-top: 10px;
+  gap: 6px;
+}
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+input:not([type="checkbox"]) {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+}
+input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+button.primary {
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+button.link {
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.error {
+  color: #ff8080;
+  margin: 0;
+  min-height: 1em;
+}
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+}
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+.card > .row h2 {
+  margin: 0;
+}
+.bar.big {
+  height: 6px;
+  margin: 10px 0 14px;
+}
+.card > .row:first-child {
+  margin-bottom: 10px;
+}

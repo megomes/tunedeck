@@ -2,9 +2,10 @@
 
 import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { jamPlayed, openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
+import { useLocalVariants } from "@/lib/client/offline";
 import { useData } from "@/lib/client/store";
 import { closePlayer, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
@@ -12,6 +13,8 @@ import { useView } from "@/lib/client/views";
 import { RESOURCE_LABEL } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
+import { transposeFor } from "@/lib/shared/tuning";
+import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
 import { Thumb } from "./Thumb";
 
 // Minimal typing for the YouTube IFrame Player API.
@@ -168,6 +171,17 @@ export function Player() {
 
   const wrap = useRef<HTMLDivElement>(null);
   const yt = useRef<YTPlayer | null>(null);
+  const engine = useRef<Engine | null>(null);
+  const [controlsHost, setControlsHost] = useState<HTMLDivElement | null>(null);
+
+  // Phones/tablets play videos stored on the device (fetched from the desktop app) in TuneDeck's own player.
+  const local = useLocalVariants(media?.videoId ?? null);
+  const [nativeFailed, setNativeFailed] = useState<string | null>(null);
+  const native = !!media?.videoId && local.includes(0) && nativeFailed !== media.videoId;
+  const shift = resource?.type === "standard_tuning" ? null : transposeFor(view?.entry.tuning);
+  const variants: Variant[] = [{ semitones: 0, label: view?.entry.tuning || "Original" }];
+  if (shift && local.includes(shift.semitones)) variants.push({ semitones: shift.semitones, label: shift.target });
+  const onNativeUnavailable = useCallback(() => setNativeFailed(media?.videoId ?? null), [media?.videoId]);
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
 
@@ -204,11 +218,11 @@ export function Player() {
   useEffect(() => {
     if (!state) return;
     const id = setInterval(() => {
-      const p = yt.current;
-      if (!p || typeof p.getPlayerState !== "function" || p.getPlayerState() !== PLAYING) return;
-      const r = sample(take.current, p.getCurrentTime());
+      const p = engine.current;
+      if (!p || !p.playing()) return;
+      const r = sample(take.current, p.time());
       take.current = r.take;
-      const threshold = thresholdFor(p.getDuration() || media?.durationSeconds);
+      const threshold = thresholdFor(p.duration() || media?.durationSeconds);
       if (!take.current.counted && take.current.watched >= threshold && autoRef.current && playedRef.current) {
         take.current = { ...take.current, counted: true };
         playedRef.current(true);
@@ -230,6 +244,11 @@ export function Player() {
     setError(null);
     const start = startSeconds(media.url);
     resetTake();
+    if (native) {
+      yt.current?.destroy();
+      yt.current = null;
+      return;
+    }
     if (yt.current) {
       yt.current.loadVideoById({ videoId, startSeconds: start });
       yt.current.setPlaybackRate(speed);
@@ -242,7 +261,7 @@ export function Player() {
         // YT replaces the host node with an iframe, so React must not own it.
         const host = document.createElement("div");
         wrap.current.replaceChildren(host);
-        yt.current = new YT.Player(host, {
+        const player = new YT.Player(host, {
           videoId,
           width: "100%",
           height: "100%",
@@ -252,19 +271,27 @@ export function Player() {
               setError(e.data === 101 || e.data === 150 ? "The owner doesn't allow this video to play inside other apps." : "This video can't be played here."),
           },
         });
+        yt.current = player;
+        const ready = () => typeof player.getPlayerState === "function";
+        engine.current = {
+          time: () => (ready() ? player.getCurrentTime() : 0),
+          duration: () => (ready() ? player.getDuration() : 0),
+          playing: () => ready() && player.getPlayerState() === PLAYING,
+        };
       })
       .catch(() => setError("Couldn't load the YouTube player. Check your connection."));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId, media?.key]);
+  }, [videoId, media?.key, native]);
 
   // Tear down when the player is closed.
   useEffect(() => {
     if (state) return;
     yt.current?.destroy();
     yt.current = null;
+    engine.current = null;
     wrap.current?.replaceChildren();
   }, [state]);
 
@@ -299,7 +326,22 @@ export function Player() {
       )}
 
       <div className="player-stage">
-        <div className="player-video" ref={wrap} />
+        {native && media.videoId ? (
+          <NativeVideo
+            key={media.key}
+            videoId={media.videoId}
+            variants={variants}
+            start={startSeconds(media.url)}
+            expanded={expanded}
+            controlsHost={controlsHost}
+            engineRef={engine}
+            title={media.miniTitle}
+            artist={view?.song.artist ?? media.author}
+            onUnavailable={onNativeUnavailable}
+          />
+        ) : (
+          <div className="player-video" ref={wrap} />
+        )}
         {burst > 0 && (
           <div key={burst} className="autoplus" aria-hidden>
             <span className="ring" />
@@ -343,9 +385,11 @@ export function Player() {
             )}
           </div>
 
+          {native && <div ref={setControlsHost} />}
+
           <div className="row-gap" style={{ flexWrap: "wrap" }}>
-            <Gauge size={16} color="var(--text-tertiary)" />
-            {SPEEDS.map((s) => (
+            {!native && <Gauge size={16} color="var(--text-tertiary)" />}
+            {!native && SPEEDS.map((s) => (
               <button
                 key={s}
                 className={`chip sm ${speed === s ? "active" : ""}`}

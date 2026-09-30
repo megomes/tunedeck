@@ -20,6 +20,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@neondatabase/serverless": "^1.1.0",
+    "@vercel/functions": "^3.9.9",
     "drizzle-orm": "^0.45.3",
     "idb-keyval": "^6.3.0",
     "lucide-react": "^1.48.0",

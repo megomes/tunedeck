@@ -1,11 +1,13 @@
 /* TuneDeck service worker — app shell + thumbnail caching for offline use. */
-const VERSION = "td-v3";
+const VERSION = "td-v4";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const IMAGES = `${VERSION}-images`;
 const PAGES = ["/", "/jam", "/jam/add", "/jam/edit", "/tags", "/tag", "/add", "/settings", "/song", "/song/edit"];
 const PUBLIC = ["/login", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/logo-96.png"];
 const MAX_IMAGES = 400;
+// Downloaded practice videos (src/lib/client/videoCache.ts) survive SW updates and "clear cache".
+const KEEP = "td-videos";
 
 async function cachePage(cache, path) {
   try {
@@ -30,7 +32,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k)));
+      await Promise.all(keys.filter((k) => !k.startsWith(VERSION) && k !== KEEP).map((k) => caches.delete(k)));
       await self.clients.claim();
     })(),
   );
@@ -39,7 +41,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data === "warm") event.waitUntil(warm());
   if (event.data === "clear") {
-    event.waitUntil(caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))));
+    event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== KEEP).map((k) => caches.delete(k)))));
   }
 });
 

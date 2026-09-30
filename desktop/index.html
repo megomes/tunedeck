@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+    <title>TuneDeck</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icon.png" alt="" />
+      <h1>TuneDeck</h1>
+      <span id="pill" class="pill off">…</span>
+    </header>
+
+    <section id="login" class="card" hidden>
+      <h2>Connect to your TuneDeck</h2>
+      <p class="muted">Use the same access code as on your phone. This computer then downloads your videos and sends them to your phone and tablet over Wi-Fi.</p>
+      <form id="login-form">
+        <label>Server <input id="server" autocomplete="off" spellcheck="false" /></label>
+        <label>Access code <input id="code" type="password" autocomplete="off" required /></label>
+        <button id="login-btn" class="primary" type="submit">Sign in</button>
+        <p id="login-error" class="error"></p>
+      </form>
+    </section>
+
+    <main id="main" hidden>
+      <p id="conn-error" class="error" hidden></p>
+      <section class="card">
+        <h2>Phones &amp; tablets</h2>
+        <div id="devices" class="list"></div>
+      </section>
+
+      <section class="card">
+        <div class="row"><h2>Queue</h2><span id="queue-summary" class="muted small"></span></div>
+        <div id="queue-bar" class="bar big" hidden><i></i></div>
+        <div id="jobs" class="list"></div>
+      </section>
+
+      <section class="card">
+        <h2>On this computer</h2>
+        <div class="row"><span id="library"></span><button id="open-folder" class="link">Open folder</button></div>
+        <div id="tools" class="list tools"></div>
+        <div class="row"><span></span><button id="recheck" class="link">Check again</button></div>
+      </section>
+
+      <footer>
+        <label class="check"><input id="autostart" type="checkbox" /> Open when Windows starts</label>
+        <span class="muted small"><span id="server-label"></span> · <button id="logout" class="link">Sign out</button></span>
+      </footer>
+    </main>
+    <script src="renderer.js"></script>
+  </body>
+</html>

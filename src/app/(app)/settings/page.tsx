@@ -18,6 +18,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { OfflineVideosSection } from "@/components/OfflineVideos";
 import { InstrumentChips, StatusChips } from "@/components/Pickers";
 import { TopBar } from "@/components/TopBar";
 import { setSetting } from "@/lib/client/actions";
@@ -128,6 +129,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <OfflineVideosSection />
 
         <section className="section">
           <p className="step-title">Tunings</p>

@@ -40,6 +40,22 @@ original / cover / lesson / backing track — one tap away. See [`tunedeck-produ
   "Surprise me" picks a random one (favouring the least played), and the player suggests scales for the key.
   Jams are counted like songs: manually or automatically from the embedded player.
 
+## Videos on phones and tablets (desktop app)
+
+`desktop/` is a small Windows app (Electron) that lives in the tray. It downloads the library's
+YouTube videos with `yt-dlp`, renders a standard-tuning copy for songs in other tunings with
+`ffmpeg`'s Rubber Band filter, and sends the files to phones/tablets over the local Wi-Fi.
+Nothing is stored in the cloud: files live in `Videos\TuneDeck` on the PC and in Cache Storage
+on each device.
+
+- Discovery: the app polls `/api/desktop` (Vercel Runtime Cache, not Postgres). A phone that sees
+  it online posts a WebRTC offer there and gets the answer back; the data channel then connects
+  directly. No STUN/TURN is used, so it only connects on the same network.
+- On phones/tablets, a video stored on the device opens in TuneDeck's own player (gestures,
+  A–B loop, tuning switch). Desktop browsers always use the YouTube embed.
+- Needs `yt-dlp` and an ffmpeg "full" build on the PATH (`winget install Gyan.FFmpeg`).
+- Build and create the Desktop/Start Menu shortcuts: `cd desktop && npm install && npm run build`.
+
 ## Local development
 
 ```bash

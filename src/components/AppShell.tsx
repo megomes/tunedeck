@@ -4,9 +4,11 @@ import { AudioLines, Kanban, Plus, Settings, Tags, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
+import { initOffline } from "@/lib/client/offline";
 import { initStore, useStore } from "@/lib/client/store";
 import { dismissToast, setActiveSong, useActiveSong, usePlayer, useToasts } from "@/lib/client/ui";
 import { useView } from "@/lib/client/views";
+import { OfflineBanner } from "./OfflineVideos";
 import { Player } from "./Player";
 import { PlusOne } from "./PlusOne";
 import { SyncBadge } from "./SyncBadge";
@@ -85,6 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void initStore();
+    void initOffline();
     if ("serviceWorker" in navigator) {
       if (process.env.NODE_ENV === "production") navigator.serviceWorker.register("/sw.js").catch(() => {});
       // In dev a leftover worker from a local prod build would serve stale pages.
@@ -118,7 +121,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <main className={`main ${hasDock ? "has-dock" : ""}`}>{ready ? children : null}</main>
+      <main className={`main ${hasDock ? "has-dock" : ""}`}>
+        {ready && <OfflineBanner />}
+        {ready ? children : null}
+      </main>
 
       <Player />
       {!player && (

@@ -1,0 +1,18 @@
+{
+  "name": "tunedeck-desktop",
+  "productName": "TuneDeck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Downloads your TuneDeck videos and sends them to your phone and tablet over Wi-Fi.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . TuneDeck --platform=win32 --arch=x64 --out=dist --overwrite --icon=icon.ico --ignore=^/dist",
+    "install-shortcuts": "powershell -NoProfile -ExecutionPolicy Bypass -File install-shortcuts.ps1",
+    "build": "npm run package && npm run install-shortcuts"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.5.1"
+  }
+}
