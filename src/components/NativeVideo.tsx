@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play, Repeat, RotateCcw, RotateCw } from "lucide-react";
+import { Pause, Play, Repeat, RotateCcw, RotateCw, SkipBack } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { openLocalVideo } from "@/lib/client/offline";
@@ -165,6 +165,14 @@ export function NativeVideo({
   );
 
   const seekBy = useCallback((d: number) => seekTo((cur()?.currentTime ?? 0) + d), [cur, seekTo]);
+
+  /** Back to the start of the loop (or of the video) and play: the "one more time" button. */
+  const restart = useCallback(() => {
+    const v = cur();
+    if (!v) return;
+    v.currentTime = loopRef.current?.a ?? 0;
+    void v.play().catch(() => {});
+  }, [cur]);
 
   async function switchVariant(next: number) {
     if (next === activeRef.current || urls[next] == null || switching) return;
@@ -343,6 +351,9 @@ export function NativeVideo({
     <div className="nv-controls">
       <SeekBar getVideo={cur} duration={duration} loop={loop} onSeek={seekTo} />
       <div className="nv-buttons">
+        <button className="icon-btn nv-skip" aria-label={loop ? "Back to loop start" : "Restart"} title={loop ? "Back to A" : "Restart"} onClick={restart}>
+          <SkipBack />
+        </button>
         <button className="icon-btn nv-skip" aria-label={`Back ${SKIP} seconds`} onClick={() => seekBy(-SKIP)}>
           <RotateCcw />
           <span>{SKIP}</span>
@@ -472,10 +483,31 @@ export function NativeVideo({
             <Play fill="currentColor" />
           </div>
         )}
+        <ProgressLine getVideo={cur} duration={duration} />
         {hasShift && active !== 0 && <span className="nv-badge">{variants.find((v) => v.semitones === active)?.label}</span>}
       </div>
       {expanded && controlsHost && createPortal(controls, controlsHost)}
     </>
+  );
+}
+
+/** Thin progress line along the bottom of the video, visible in every layout (mini player too). */
+function ProgressLine({ getVideo, duration }: { getVideo: () => HTMLVideoElement | null; duration: number }) {
+  const fill = useRef<HTMLElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const paint = () => {
+      const v = getVideo();
+      if (v && fill.current && duration > 0) fill.current.style.width = `${(v.currentTime / duration) * 100}%`;
+      raf = requestAnimationFrame(paint);
+    };
+    raf = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(raf);
+  }, [getVideo, duration]);
+  return (
+    <span className="nv-line" aria-hidden>
+      <i ref={fill} />
+    </span>
   );
 }
 

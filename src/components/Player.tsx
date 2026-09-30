@@ -311,7 +311,7 @@ export function Player() {
   if (!state || !media) return null;
 
   return (
-    <div className={`player ${expanded ? "expanded" : "mini"}`} role="region" aria-label="Video player">
+    <div className={`player ${expanded ? "expanded" : "mini"} ${native ? "native" : ""}`} role="region" aria-label="Video player">
       {expanded && (
         <div className="player-head">
           <button className="icon-btn" aria-label="Minimize" onClick={() => setPlayerExpanded(false)}>
@@ -368,6 +368,9 @@ export function Player() {
 
       {expanded ? (
         <div className="player-body">
+          {/* Own player: its controls come first, right under (or beside) the video. */}
+          {native && <div ref={setControlsHost} />}
+
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               {media.title}
@@ -385,8 +388,6 @@ export function Player() {
               </button>
             )}
           </div>
-
-          {native && <div ref={setControlsHost} />}
 
           <div className="row-gap" style={{ flexWrap: "wrap" }}>
             {!native && <Gauge size={16} color="var(--text-tertiary)" />}
