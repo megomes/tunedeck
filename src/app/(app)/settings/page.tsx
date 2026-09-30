@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { OfflineVideosSection } from "@/components/OfflineVideos";
 import { InstrumentChips, StatusChips } from "@/components/Pickers";
+import { APP_VERSION } from "@/components/SyncBadge";
 import { TopBar } from "@/components/TopBar";
 import { setSetting } from "@/lib/client/actions";
 import { timeAgo } from "@/lib/client/format";
@@ -206,7 +207,7 @@ export default function SettingsPage() {
               <span className="grow">
                 {syncStatus === "offline" ? "Offline — changes are queued" : syncStatus === "error" ? "Sync error" : "Library cached on this device"}
                 <div className="meta">
-                  {data.entries.length} songs · last sync {lastSyncAt ? timeAgo(lastSyncAt).toLowerCase() : "never"}
+                  {data.entries.length} songs · last sync {lastSyncAt ? timeAgo(lastSyncAt).toLowerCase() : "never"} · {APP_VERSION}
                   {pending ? ` · ${pending} change${pending > 1 ? "s" : ""} pending` : ""}
                 </div>
               </span>

@@ -3460,3 +3460,6 @@ button.fact:hover {
   background: var(--success);
   color: #06140d;
 }
+.app-version {
+  color: var(--text-tertiary);
+}

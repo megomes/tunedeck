@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
+import pkg from "./package.json";
 
 const nextConfig: NextConfig = {
+  // Shown next to the sync status so it's clear which release a device is running.
+  env: { NEXT_PUBLIC_APP_VERSION: pkg.version },
   // The board at "/" replaced the separate Library page; keep old links (and query filters) working.
   async redirects() {
     return [{ source: "/library", destination: "/", permanent: false }];

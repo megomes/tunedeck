@@ -4,6 +4,8 @@ import { CloudOff, RefreshCw } from "lucide-react";
 import { sync, useStore } from "@/lib/client/store";
 import { timeAgo } from "@/lib/client/format";
 
+export const APP_VERSION = `v${process.env.NEXT_PUBLIC_APP_VERSION ?? "dev"}`;
+
 /** Quiet by default: only surfaces when offline or when changes are waiting to sync. */
 export function SyncBadge({ always = false }: { always?: boolean }) {
   const status = useStore((s) => s.sync);
@@ -14,8 +16,11 @@ export function SyncBadge({ always = false }: { always?: boolean }) {
 
   if (status === "offline") {
     return (
-      <span className="offline-pill">
-        <CloudOff /> Offline{pending ? ` · ${pending} pending` : ""}
+      <span className="row-gap">
+        <span className="offline-pill">
+          <CloudOff /> Offline{pending ? ` · ${pending} pending` : ""}
+        </span>
+        {always && <span className="meta">{APP_VERSION}</span>}
       </span>
     );
   }
@@ -28,6 +33,7 @@ export function SyncBadge({ always = false }: { always?: boolean }) {
           ? `Sync error${pending ? ` · ${pending} pending` : ""}`
           : `Synced ${last ? timeAgo(last).toLowerCase() : ""}`}
       {status === "error" && <RefreshCw size={12} />}
+      {always && <span className="app-version">· {APP_VERSION}</span>}
     </button>
   );
 }
