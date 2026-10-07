@@ -119,3 +119,8 @@ printf '%s' 'NEWCODE' | tr a-z A-Z | shasum -a 256
 ```
 
 Put the hash in `ACCESS_CODE_HASH` (locally and on Vercel) and redeploy.
+
+## License
+
+[MIT](LICENSE)
+
