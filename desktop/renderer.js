@@ -117,7 +117,7 @@ function render() {
         tool("Rubber Band (tuning)", t.rubberband ? "ok" : null, "Needs an ffmpeg “full” build, e.g. winget install Gyan.FFmpeg"),
       ].join("");
   $("#autostart").checked = status.openAtLogin;
-  $("#server-label").textContent = new URL(status.server).host;
+  $("#server-label").textContent = status.server ? new URL(status.server).host : "";
 }
 
 function rank(j) {

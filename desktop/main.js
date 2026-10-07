@@ -9,7 +9,8 @@ const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 
-const DEFAULT_SERVER = "https://tunedeck.vercel.app";
+// Your TuneDeck deployment: typed on the sign-in screen, or preset with TUNEDECK_SERVER.
+const DEFAULT_SERVER = process.env.TUNEDECK_SERVER || "";
 const POLL_MS = 4000;
 
 // Expose real LAN addresses in ICE candidates so phones on the same Wi-Fi can reach this PC.
@@ -164,6 +165,7 @@ async function apiFetch(pathname, init = {}) {
 
 ipcMain.handle("login", async (_e, { server, code }) => {
   try {
+    if (!server && !DEFAULT_SERVER) return { ok: false, error: "Enter the address of your TuneDeck server" };
     const base = new URL(server || DEFAULT_SERVER).origin;
     const res = await fetch(new URL("/api/auth/login", base), {
       method: "POST",
