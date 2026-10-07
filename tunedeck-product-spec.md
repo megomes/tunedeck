@@ -340,7 +340,7 @@ Examples:
 - Warmup
 - 2000s
 - To Record
-- Felipe Likes
+- Kids' Picks
 
 Tag features:
 
