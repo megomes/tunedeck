@@ -1,8 +1,47 @@
-# TuneDeck
+<div align="center">
 
-A private, offline-friendly PWA for managing a personal musical repertoire: what you want to play,
-what you're learning, what you can play, the tuning, the Songsterr tab, and every YouTube
-original / cover / lesson / backing track — one tap away. See [`tunedeck-product-spec.md`](tunedeck-product-spec.md).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset=".github/assets/banner-light.png">
+  <img alt="TuneDeck: your repertoire as a board" src=".github/assets/banner-dark.png" width="100%">
+</picture>
+
+<br>
+
+<img src="https://skillicons.dev/icons?i=nextjs,react,ts,postgres,electron,vercel" alt="Next.js, React, TypeScript, Postgres, Electron, Vercel">
+
+<br><br>
+
+**A private, offline-friendly PWA for your musical repertoire.**<br>
+What you want to play, what you're learning, what you can play, the tuning, the Songsterr tab,<br>
+and every YouTube original, cover, lesson and backing track, one tap away.
+
+[Screenshots](#screenshots) · [How it works](#how-it-works) · [Local development](#local-development)
+
+</div>
+
+## Screenshots
+
+<img src=".github/assets/library.png" alt="The library as a kanban board: Want to Play, Learning, Can Play, Mastered and Archived" width="100%">
+
+<table>
+  <tr>
+    <td width="50%"><img src=".github/assets/song.png" alt="A song with its tuning, difficulty, tags and every video and link"></td>
+    <td width="50%"><img src=".github/assets/jam.png" alt="Jam: backing tracks filtered by key, tempo and style"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Song</b> · tuning, capo, difficulty, tags, videos and files</td>
+    <td align="center"><b>Jam</b> · backing tracks by key, tempo and style</td>
+  </tr>
+</table>
+
+<details>
+<summary><b>On a phone</b></summary>
+<br>
+<p align="center"><img src=".github/assets/phone.png" alt="The library on a phone: one column per screen with a bottom bar" width="360"></p>
+</details>
+
+<sub>A sample repertoire with real YouTube videos; play counts and progress are made up. See the full product spec in <a href="tunedeck-product-spec.md"><code>tunedeck-product-spec.md</code></a>.</sub>
 
 ## Stack
 
