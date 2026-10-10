@@ -11,6 +11,7 @@ export interface Engine {
   time(): number;
   duration(): number;
   playing(): boolean;
+  seek(t: number): void;
 }
 
 export interface Variant {
@@ -119,6 +120,10 @@ export function NativeVideo({
       playing: () => {
         const v = cur();
         return !!v && !v.paused && !v.ended;
+      },
+      seek: (t) => {
+        const v = cur();
+        if (v) v.currentTime = t;
       },
     };
     return () => {

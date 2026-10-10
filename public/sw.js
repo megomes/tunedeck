@@ -1,9 +1,9 @@
 /* TuneDeck service worker — app shell + thumbnail caching for offline use. */
-const VERSION = "td-v4";
+const VERSION = "td-v5";
 const SHELL = `${VERSION}-shell`;
 const STATIC = `${VERSION}-static`;
 const IMAGES = `${VERSION}-images`;
-const PAGES = ["/", "/jam", "/jam/add", "/jam/edit", "/tags", "/tag", "/add", "/settings", "/song", "/song/edit"];
+const PAGES = ["/", "/riffs", "/jam", "/jam/add", "/jam/edit", "/tags", "/tag", "/add", "/settings", "/song", "/song/edit"];
 const PUBLIC = ["/login", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/logo-96.png"];
 const MAX_IMAGES = 400;
 // Downloaded practice videos (src/lib/client/videoCache.ts) survive SW updates and "clear cache".

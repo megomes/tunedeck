@@ -16,11 +16,13 @@ import {
   updateResource,
 } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
+import { useData } from "@/lib/client/store";
 import { usePlayer } from "@/lib/client/ui";
 import { primaryOf, type SongView } from "@/lib/client/views";
 import { RESOURCE_LABEL, RESOURCE_SHORT, RESOURCE_TYPES, type Resource, type ResourceType } from "@/lib/shared/types";
 import { detectProvider, extractFirstUrl, hostLabel } from "@/lib/shared/urls";
 import { CategoryChips, LabelInput } from "./Pickers";
+import { RiffStrip } from "./Riffs";
 import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
@@ -64,6 +66,7 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
   const [editing, setEditing] = useState(false);
   const player = usePlayer();
   const playing = player?.kind === "resource" && player.resourceId === r.id;
+  const riffs = useData().riffs.filter((x) => x.repertoireEntryId === r.repertoireEntryId);
   const loading = r.metaStatus === "pending" && !r.title;
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={isDragging ? "dragging" : ""}>
@@ -109,6 +112,7 @@ function ResourceItem({ r, view, showStar, isPrimary }: { r: Resource; view: Son
                   {playing ? "Playing now" : r.author || hostLabel(r.url)}
                   {r.metaStatus === "failed" && " · details unavailable"}
                 </span>
+                <RiffStrip riffs={riffs} resourceId={r.id} duration={r.durationSeconds} />
               </>
             )}
           </span>

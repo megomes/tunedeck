@@ -24,6 +24,7 @@ export const POST = withSession(async (req) => {
     ...(data.playEvents ?? []).map((event) => ({ t: "play.add", event }) as Op),
     ...(data.jamTracks ?? []).map((track) => ({ t: "jam.upsert", track }) as Op),
     ...(data.jamPlays ?? []).map((play) => ({ t: "jamPlay.add", play }) as Op),
+    ...(data.riffs ?? []).map((riff) => ({ t: "riff.upsert", riff }) as Op),
     ...Object.entries(data.settings ?? {}).map(([key, value]) => ({ t: "setting.set", key, value }) as Op),
   ];
   let applied = 0;

@@ -9,6 +9,7 @@ import { DifficultyInput } from "@/components/Difficulty";
 import { playableOf } from "@/components/BoardCard";
 import { LoadingList } from "@/components/Loading";
 import { ResourcesSection } from "@/components/Resources";
+import { RiffsSection } from "@/components/Riffs";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
 import {
@@ -256,6 +257,7 @@ function SongDetail() {
         </div>
         <div className="detail-res">
           <ResourcesSection view={view} />
+          <RiffsSection view={view} />
         </div>
         </div>
 

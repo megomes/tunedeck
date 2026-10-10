@@ -7,14 +7,15 @@ import { jamPlayed, openLink, openResource, openSongsterr, playedOnce } from "@/
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
 import { useData } from "@/lib/client/store";
-import { closePlayer, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
+import { closePlayer, playVideo, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
-import { RESOURCE_LABEL } from "@/lib/shared/types";
+import { RESOURCE_LABEL, riffColor } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
 import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
+import { RiffBar } from "./RiffBar";
 import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
@@ -23,6 +24,7 @@ interface YTPlayer {
   loadVideoById(o: { videoId: string; startSeconds?: number }): void;
   setPlaybackRate(rate: number): void;
   getCurrentTime(): number;
+  seekTo(seconds: number, allowSeekAhead: boolean): void;
   getDuration(): number;
   getPlayerState(): number;
   destroy(): void;
@@ -186,6 +188,50 @@ export function Player() {
   const [error, setError] = useState<string | null>(null);
   const [speed, setSpeed] = useState(1);
 
+  // --- riff loop -----------------------------------------------------------
+  const entryRiffs = state?.kind === "resource" ? data.riffs.filter((r) => r.repertoireEntryId === state.entryId) : [];
+  // The loop is whatever the active riff marks in the playing video, so editing a mark moves it live.
+  const requestedRiff = state?.kind === "resource" ? (state.riffId ?? null) : null;
+  const [riffId, setRiffId] = useState<string | null>(null);
+  const riff = riffId ? data.riffs.find((r) => r.id === riffId) : undefined;
+  const mark = riff && resource ? riff.marks[resource.id] : undefined;
+  const loop = mark && mark.b != null ? { a: mark.a, b: mark.b } : null;
+  const loopRef = useRef(loop);
+  useEffect(() => {
+    loopRef.current = loop;
+  });
+  const requestedStart = (() => {
+    const r = requestedRiff ? data.riffs.find((x) => x.id === requestedRiff) : undefined;
+    return r && resource ? r.marks[resource.id]?.a : undefined;
+  })();
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRiffId(requestedRiff);
+    // Same video already playing: jump straight to the riff.
+    if (requestedStart != null) engine.current?.seek(requestedStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedRiff, resource?.id]);
+
+  // Jump back to the start whenever playback reaches the end of the riff, counting each pass.
+  const [reps, setReps] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReps(0);
+  }, [riffId, resource?.id]);
+  useEffect(() => {
+    if (!loop) return;
+    const id = setInterval(() => {
+      const p = engine.current;
+      const l = loopRef.current;
+      if (p && l && p.playing() && p.time() >= l.b) {
+        p.seek(l.a);
+        setReps((n) => n + 1);
+      }
+    }, 40);
+    return () => clearInterval(id);
+  }, [!!loop]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- auto +1 -------------------------------------------------------------
   const take = useRef<Take>(newTake());
   const playedRef = useRef<Media["played"] | null>(null);
@@ -243,7 +289,7 @@ export function Player() {
     if (!videoId || !media) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
-    const start = startSeconds(media.url);
+    const start = requestedStart ?? startSeconds(media.url);
     resetTake();
     if (native) {
       yt.current?.destroy();
@@ -278,6 +324,7 @@ export function Player() {
           time: () => (ready() ? player.getCurrentTime() : 0),
           duration: () => (ready() ? player.getDuration() : 0),
           playing: () => ready() && player.getPlayerState() === PLAYING,
+          seek: (t) => ready() && player.seekTo(t, true),
         };
       })
       .catch(() => setError("Couldn't load the YouTube player. Check your connection."));
@@ -332,7 +379,7 @@ export function Player() {
             key={media.key}
             videoId={media.videoId}
             variants={variants}
-            start={startSeconds(media.url)}
+            start={requestedStart ?? startSeconds(media.url)}
             expanded={expanded}
             controlsHost={controlsHost}
             engineRef={engine}
@@ -370,6 +417,11 @@ export function Player() {
         <div className="player-body">
           {/* Own player: its controls come first, right under (or beside) the video. */}
           {native && <div ref={setControlsHost} />}
+
+          {/* Riffs right under the video: the part used with the guitar in hand. */}
+          {view && resource && (
+            <RiffBar entryId={view.id} resource={resource} riffId={riffId} setRiffId={setRiffId} engine={engine} reps={reps} />
+          )}
 
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
@@ -422,7 +474,9 @@ export function Player() {
               <Sparkles /> Auto +1 {auto ? "on" : "off"}
             </button>
             <span className="meta">
-              {!auto
+              {loop
+                ? "Looping a riff — song plays aren't counted while it loops."
+                : !auto
                 ? `Tap ${jam ? "Jammed" : "Played"} when you finish.`
                 : progress.counted
                   ? "Counted ✓ — rewind to play it again."
@@ -432,6 +486,8 @@ export function Player() {
           </div>
 
           {jam && <JamInfo trackId={jam.id} />}
+
+
 
           {view && resource && (
             <>
@@ -448,7 +504,12 @@ export function Player() {
                   <p className="step-title">Versions</p>
                   <div className="list">
                     {view.resources.map((r) => (
-                      <button key={r.id} className={`pick ${r.id === resource.id ? "active" : ""}`} onClick={() => openResource(r)}>
+                      <button
+                        key={r.id}
+                        className={`pick ${r.id === resource.id ? "active" : ""}`}
+                        // Keep the selected riff: it loops in the other video too, or gets marked there.
+                        onClick={() => (riffId && r.provider === "youtube" && r.externalId ? playVideo(r.id, view.id, riffId) : openResource(r))}
+                      >
                         <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
                           {r.provider === "youtube" && <SourceBadge videoId={r.externalId} />}
                           {r.id === resource.id && (
@@ -466,6 +527,15 @@ export function Player() {
                           <span className="row-title truncate" style={{ fontWeight: 500, fontSize: 13.5 }}>
                             {r.title || hostLabel(r.url)}
                           </span>
+                          {entryRiffs.some((x) => x.marks[r.id]) && (
+                            <span className="riff-dots" aria-label="Riffs marked in this video">
+                              {entryRiffs
+                                .filter((x) => x.marks[r.id])
+                                .map((x) => (
+                                  <i key={x.id} style={{ background: riffColor(x) }} title={x.name} />
+                                ))}
+                            </span>
+                          )}
                         </span>
                       </button>
                     ))}

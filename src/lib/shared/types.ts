@@ -174,6 +174,36 @@ export interface JamTrack {
   updatedAt: string;
 }
 
+/** Where a riff sits in one video: start and end in seconds. */
+export interface RiffMark {
+  a: number;
+  b: number | null;
+}
+
+/**
+ * A part of a song learned on its own (intro, chorus riff, solo…), with its own status.
+ * Each video of the song gets its own mark, keyed by resource id, since the same riff
+ * sits at a different time in the original, a cover or a lesson.
+ */
+export interface Riff {
+  id: string;
+  repertoireEntryId: string;
+  name: string;
+  /** Same color in every video, on the timeline, chips and lists. */
+  color: string | null;
+  status: Status;
+  marks: Record<string, RiffMark>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Riff colors, picked in order so riffs of one song never share one. */
+export const RIFF_COLORS = ["#3DB8FF", "#F5C542", "#4CC38A", "#E062D6", "#FF8A3D", "#7C6CFF", "#FF2D2D"];
+
+export function riffColor(r: Pick<Riff, "color">) {
+  return r.color ?? RIFF_COLORS[0];
+}
+
 export interface JamPlay {
   id: string;
   trackId: string;
@@ -197,6 +227,7 @@ export interface Snapshot {
   attachments: Attachment[];
   jamTracks: JamTrack[];
   jamPlays: JamPlay[];
+  riffs: Riff[];
   settings: Settings;
 }
 
@@ -210,6 +241,7 @@ export const EMPTY_SNAPSHOT: Snapshot = {
   attachments: [],
   jamTracks: [],
   jamPlays: [],
+  riffs: [],
   settings: {},
 };
 
@@ -236,7 +268,9 @@ export type Op =
   | { t: "jam.upsert"; track: JamTrack }
   | { t: "jam.delete"; id: string }
   | { t: "jamPlay.add"; play: JamPlay }
-  | { t: "jamPlay.delete"; id: string; trackId: string };
+  | { t: "jamPlay.delete"; id: string; trackId: string }
+  | { t: "riff.upsert"; riff: Riff }
+  | { t: "riff.delete"; id: string };
 
 export interface QueuedOp {
   qid: string;

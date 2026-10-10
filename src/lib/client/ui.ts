@@ -113,7 +113,7 @@ export function writePref(key: string, value: unknown) {
 // expanded (full view) or minimized into the mini-player above the bottom nav.
 
 export type PlayerState =
-  | { kind: "resource"; resourceId: string; entryId: string; expanded: boolean }
+  | { kind: "resource"; resourceId: string; entryId: string; riffId?: string; expanded: boolean }
   | { kind: "jam"; trackId: string; expanded: boolean };
 
 let player: PlayerState | null = null;
@@ -128,8 +128,8 @@ export function playJam(trackId: string) {
   emitPlayer();
 }
 
-export function playVideo(resourceId: string, entryId: string) {
-  player = { kind: "resource", resourceId, entryId, expanded: true };
+export function playVideo(resourceId: string, entryId: string, riffId?: string) {
+  player = { kind: "resource", resourceId, entryId, riffId, expanded: true };
   // The mini-player replaces the "played it?" dock for this song.
   if (active === entryId) setActiveSong(null);
   emitPlayer();

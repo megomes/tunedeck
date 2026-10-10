@@ -57,6 +57,8 @@ export interface FeedSong {
   difficulty: number | null;
   favorite: boolean;
   tags: string[];
+  /** Parts learned on their own, each with its own status. */
+  riffs: { name: string; status: string }[];
   playCount: number;
   lastPlayedAt: string | null;
   addedAt: string;
@@ -107,6 +109,7 @@ export function buildFeed(snap: Snapshot): Feed {
           .filter((t) => t.repertoireEntryId === e.id)
           .map((t) => tagNames.get(t.tagId))
           .filter((n): n is string => !!n),
+        riffs: snap.riffs.filter((r) => r.repertoireEntryId === e.id).map((r) => ({ name: r.name, status: r.status })),
         playCount: e.playCount,
         lastPlayedAt: e.lastPlayedAt,
         addedAt: e.createdAt,
@@ -136,6 +139,7 @@ export function feedToMarkdown(feed: Feed): string {
     `Generated ${feed.generatedAt}. ${feed.summary.songs} songs.`,
     "",
     "Statuses: Want to Play (wishlist) → Learning (practicing now) → Can Play → Mastered; Archived and Backlog are parked.",
+    "Riffs are parts of a song (intro, solo…) learned on their own, each with its own status, independent of the song's status.",
     "",
   ];
   for (const status of STATUSES) {
@@ -151,6 +155,7 @@ export function feedToMarkdown(feed: Feed): string {
         s.bpm ? `${s.bpm} BPM` : null,
         s.difficulty != null ? `difficulty ${s.difficulty}/5` : null,
         s.tags.length ? `tags: ${s.tags.join(", ")}` : null,
+        s.riffs.length ? `riffs: ${s.riffs.map((r) => `${r.name} (${STATUS_LABEL[r.status as (typeof STATUSES)[number]] ?? r.status})`).join(", ")}` : null,
         s.playCount ? `played ${s.playCount}×` : null,
         s.favorite ? "favorite" : null,
       ].filter(Boolean);
