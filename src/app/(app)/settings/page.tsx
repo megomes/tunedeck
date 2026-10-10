@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  Bot,
   CloudOff,
+  Copy,
   Database,
   Download,
   FileSpreadsheet,
@@ -9,6 +11,7 @@ import {
   LogOut,
   MonitorSmartphone,
   RefreshCw,
+  Link2Off,
   ShieldOff,
   Smartphone,
   Tags,
@@ -45,6 +48,99 @@ function deviceName(ua: string | null) {
   const os = /iPhone|iPad/.test(ua) ? "iOS" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "macOS" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "Device";
   const browser = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Browser";
   return `${browser} on ${os}`;
+}
+
+/** Secret read-only link to the repertoire, for AI agents (JSON or Markdown). */
+function AgentFeedSection() {
+  const [token, setToken] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api("/api/feed")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setToken(j.token))
+      .catch(() => {});
+  }, []);
+
+  async function call(method: "POST" | "DELETE") {
+    setBusy(true);
+    try {
+      const res = await api("/api/feed", { method });
+      if (!res.ok) throw new Error();
+      setToken((await res.json()).token);
+    } catch {
+      toast("Could not update the link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const base = token ? `${window.location.origin}/api/feed/${token}` : "";
+  const copy = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Link copied");
+    } catch {
+      prompt("Copy this link", url);
+    }
+  };
+
+  return (
+    <section className="section">
+      <p className="step-title">AI agent link</p>
+      <div className="panel" style={{ paddingTop: 6, paddingBottom: 6 }}>
+        <div className="panel-row">
+          <Bot />
+          <span className="grow">
+            {token ? "Read-only link is on" : "Share your repertoire with an AI agent"}
+            <div className="meta">
+              {token
+                ? "Anyone with the link can read your songs, status, tuning and tags. No videos, files or settings."
+                : "A secret link with your songs and their status, e.g. to ask which pedal fits what you play."}
+            </div>
+          </span>
+          {token === null && (
+            <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void call("POST")}>
+              Create link
+            </button>
+          )}
+        </div>
+        {token && (
+          <>
+            <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy(`${base}?format=md`)}>
+              <Copy />
+              <span className="grow">
+                Copy Markdown link
+                <div className="meta">Best for chat agents</div>
+              </span>
+            </button>
+            <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy(base)}>
+              <Copy />
+              <span className="grow">Copy JSON link</span>
+            </button>
+            <button
+              className="panel-row"
+              style={{ width: "100%", textAlign: "left" }}
+              disabled={busy}
+              onClick={() => confirm("Create a new link? The current one stops working.") && void call("POST")}
+            >
+              <RefreshCw />
+              <span className="grow">Replace link</span>
+            </button>
+            <button
+              className="panel-row"
+              style={{ width: "100%", textAlign: "left" }}
+              disabled={busy}
+              onClick={() => confirm("Turn off the link? It stops working immediately.") && void call("DELETE")}
+            >
+              <Link2Off />
+              <span className="grow">Turn off link</span>
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
 }
 
 export default function SettingsPage() {
@@ -198,6 +294,8 @@ export default function SettingsPage() {
             <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && void importBackup(e.target.files[0])} />
           </div>
         </section>
+
+        <AgentFeedSection />
 
         <section className="section">
           <p className="step-title">Offline & sync</p>

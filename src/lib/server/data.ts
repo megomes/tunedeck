@@ -3,6 +3,7 @@ import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { db, schema } from "@/db";
 import type { Op, Settings, Snapshot } from "@/lib/shared/types";
+import { FEED_TOKEN_KEY } from "./feed";
 import { deleteObject } from "./s3";
 
 const {
@@ -36,7 +37,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
     d.select().from(jamPlays),
   ]);
   const settings: Settings = {};
-  for (const row of st) settings[row.key] = row.value;
+  for (const row of st) if (row.key !== FEED_TOKEN_KEY) settings[row.key] = row.value;
   return {
     songs: s.map((x) => ({ ...x, createdAt: isoReq(x.createdAt), updatedAt: isoReq(x.updatedAt) })),
     entries: e.map((x) => ({
@@ -221,6 +222,8 @@ async function opToQueries(op: Op, afterCommit: (() => Promise<void>)[]): Promis
     case "jamPlay.delete":
       return [d.delete(jamPlays).where(eq(jamPlays.id, op.id)), recomputeJam(op.trackId)];
     case "setting.set":
+      // The feed token is managed by /api/feed only, never by synced ops or restored backups.
+      if (op.key === FEED_TOKEN_KEY) return [];
       return [
         d.insert(appSettings)
           .values({ key: op.key, value: op.value, updatedAt: now })
