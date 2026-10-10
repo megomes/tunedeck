@@ -29,6 +29,13 @@
       "when": 1791675928156,
       "tag": "0003_riffs",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791676614181,
+      "tag": "0004_riff_only",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Play, Search, Shuffle, X, Zap } from "lucide-react";
+import { ChevronRight, Play, Plus, Search, Shuffle, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -8,7 +8,7 @@ import { LoadingList } from "@/components/Loading";
 import { riffTime } from "@/components/Riffs";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
-import { playRiff } from "@/lib/client/actions";
+import { openResource, playRiff } from "@/lib/client/actions";
 import { useData, useLoaded } from "@/lib/client/store";
 import { useViews, type SongView } from "@/lib/client/views";
 import { STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
@@ -76,6 +76,38 @@ function RiffCard({ item }: { item: Item }) {
   );
 }
 
+/** A riff-only song with no riff yet: open its video and mark the first one. */
+function PendingCard({ view }: { view: SongView }) {
+  const router = useRouter();
+  const video = view.resources.find((r) => r.provider === "youtube" && r.externalId);
+  const open = () => (video ? openResource(video) : router.push(`/song?id=${view.id}`));
+  return (
+    <div className="bcard jcard riff-tab-card pending" onClick={open} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && open()}>
+      <div className="bcard-thumb">
+        <div className="bcard-thumb-hit">
+          <Thumb src={view.thumb} title={view.song.title}>
+            {video && (
+              <span className="bcard-play" aria-hidden>
+                <Play fill="currentColor" />
+              </span>
+            )}
+          </Thumb>
+        </div>
+      </div>
+      <div className="bcard-main">
+        <span className="bcard-title clamp-2">{view.song.title}</span>
+        <span className="secondary truncate">{view.song.artist}</span>
+        <span className="card-meta">{video ? "Play it and tap Mark a riff" : "Add a video to mark its riffs"}</span>
+      </div>
+      <div className="bcard-actions" onClick={(e) => e.stopPropagation()}>
+        <Link href={`/song?id=${view.id}#riffs`} className="icon-btn sm muted" aria-label="Open song">
+          <ChevronRight />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function RiffsPage() {
   const data = useData();
   const views = useViews();
@@ -100,6 +132,12 @@ export default function RiffsPage() {
       })
       .filter((x): x is Item => !!x);
   }, [data.riffs, views]);
+
+  // Riff-only songs that have no riff yet would otherwise be nowhere.
+  const pending = useMemo(
+    () => views.filter((v) => v.entry.riffOnly && !data.riffs.some((r) => r.repertoireEntryId === v.id)),
+    [views, data.riffs],
+  );
 
   const filtered = useMemo(() => {
     const q = normalizeKey(query);
@@ -143,7 +181,7 @@ export default function RiffsPage() {
       </>
     );
   }
-  if (!items.length) {
+  if (!items.length && !pending.length) {
     return (
       <>
         <TopBar title="Riffs" />
@@ -151,9 +189,9 @@ export default function RiffsPage() {
           <div className="empty" style={{ paddingTop: 64 }}>
             <Zap />
             <h3>Learn just the riff</h3>
-            <p>Open a song, add a riff (Intro, Solo…) and mark where it starts and ends in each video. It loops while you practice.</p>
-            <Link href="/" className="btn btn-surface mt-3">
-              Go to Library
+            <p>Add a song for just its riffs (it stays off the Library), or open any song and mark a riff in its video. It loops while you practice.</p>
+            <Link href="/add?riffs=1" className="btn btn-primary mt-3">
+              <Plus /> Add a song for its riffs
             </Link>
           </div>
         </div>
@@ -187,11 +225,24 @@ export default function RiffsPage() {
           ))}
         </div>
 
+        {pending.length > 0 && !status && !query && (
+          <section className="section">
+            <p className="step-title">No riff marked yet · {pending.length}</p>
+            <div className="jam-grid">
+              {pending.map((v) => (
+                <PendingCard key={v.id} view={v} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {groups.length === 0 ? (
+          pending.length ? null : (
           <div className="empty">
             <Zap />
             <h3>No riffs match</h3>
           </div>
+          )
         ) : (
           groups.map((g) => (
             <section key={g.s} className="section">

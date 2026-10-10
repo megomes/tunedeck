@@ -86,7 +86,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const player = usePlayer();
   const hasDock = Boolean(player) || Boolean(activeId);
   const inJam = pathname.startsWith("/jam");
-  const addHref = inJam ? "/jam/add" : "/add";
+  const inRiffs = pathname.startsWith("/riffs");
+  const addHref = inJam ? "/jam/add" : inRiffs ? "/add?riffs=1" : "/add";
 
   useEffect(() => {
     void initStore();
@@ -111,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           TuneDeck
         </Link>
         <Link href={addHref} className="btn btn-primary">
-          <Plus /> {inJam ? "Add backing track" : "Add"}
+          <Plus /> {inJam ? "Add backing track" : inRiffs ? "Add for riffs" : "Add"}
         </Link>
         {NAV.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={`side-item ${isActive(pathname, href) ? "active" : ""}`}>

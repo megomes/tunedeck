@@ -86,7 +86,8 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   selected, a video of the same length (e.g. standard tuning) gets the timing copied, and any other
   video needs one tap at the start, the end coming from the riff's length elsewhere. Video lists show
   colored strips of where each riff sits. The `/riffs` tab groups them by status; *Warm up* plays a
-  random one you already know.
+  random one you already know. A song can be **Just riffs** (chosen when adding it, or
+  switched on the song page): it stays off the Library board and lives only in the Riffs tab.
 
 - **Jam.** A separate library of YouTube backing tracks (`/jam`) with key, tempo, style and meter
   (read from the video title when possible, plus tap tempo). Filter by key/tempo/style, sort by plays,

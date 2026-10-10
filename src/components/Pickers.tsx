@@ -119,6 +119,20 @@ export function StatusChips({ value, onChange }: { value: Status; onChange: (s: 
   );
 }
 
+/** Whole song (on the Library board) or just some riffs (only in the Riffs tab). */
+export function LearnChips({ riffOnly, onChange }: { riffOnly: boolean; onChange: (riffOnly: boolean) => void }) {
+  return (
+    <div className="segmented">
+      {[false, true].map((v) => (
+        <button type="button" key={String(v)} className={`chip sm ${riffOnly === v ? "active" : ""}`} onClick={() => onChange(v)}>
+          {riffOnly === v && <Check />}
+          {v ? "Just riffs" : "Whole song"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function InstrumentChips({ value, onChange }: { value: Instrument; onChange: (i: Instrument) => void }) {
   return (
     <div className="segmented">

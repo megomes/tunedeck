@@ -96,6 +96,8 @@ export interface Entry {
   playCount: number;
   lastPlayedAt: string | null;
   isFavorite: boolean;
+  /** Only some riffs are learned, not the whole song: kept off the Library board, lives in Riffs. */
+  riffOnly?: boolean;
   /** Manual order inside its status column (lower = higher up). */
   position: number;
   createdAt: string;

@@ -64,6 +64,7 @@ Como ler:
   tags, riffs e quantas vezes eu toquei.
 - Riffs são partes de uma música (intro, solo…) que eu aprendo separadas,
   com status próprio, independente do status da música.
+- Músicas em "Just riffs" são aquelas em que eu só quero os riffs, não a música inteira.
 - Os status são:
   - Want to Play: quero aprender
   - Learning: estou praticando agora

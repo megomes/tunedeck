@@ -50,6 +50,8 @@ export interface FeedSong {
   genre: string | null;
   bpm: number | null;
   instrument: string;
+  /** Riff-only songs: just some riffs are learned, the song's status is not used. */
+  riffOnly: boolean;
   status: string;
   tuning: string | null;
   capo: number | null;
@@ -70,7 +72,9 @@ export interface Feed {
   statuses: Record<string, string>;
   summary: {
     songs: number;
+    /** Whole songs only; riff-only songs are counted apart. */
     byStatus: Record<string, number>;
+    riffOnlySongs: number;
     byInstrument: Record<string, number>;
     byTuning: Record<string, number>;
   };
@@ -100,6 +104,7 @@ export function buildFeed(snap: Snapshot): Feed {
         genre: song?.genre ?? null,
         bpm: song?.bpm ?? null,
         instrument: INSTRUMENT_LABEL[e.instrument] ?? e.instrument,
+        riffOnly: !!e.riffOnly,
         status: e.status,
         tuning: e.tuning,
         capo: e.capo,
@@ -123,7 +128,8 @@ export function buildFeed(snap: Snapshot): Feed {
     statuses: STATUS_LABEL,
     summary: {
       songs: list.length,
-      byStatus: count(list.map((s) => s.status)),
+      byStatus: count(list.filter((s) => !s.riffOnly).map((s) => s.status)),
+      riffOnlySongs: list.filter((s) => s.riffOnly).length,
       byInstrument: count(list.map((s) => s.instrument)),
       byTuning: count(list.map((s) => s.tuning)),
     },
@@ -142,10 +148,13 @@ export function feedToMarkdown(feed: Feed): string {
     "Riffs are parts of a song (intro, solo…) learned on their own, each with its own status, independent of the song's status.",
     "",
   ];
-  for (const status of STATUSES) {
-    const group = feed.songs.filter((s) => s.status === status);
+  const groups: [string, FeedSong[]][] = [
+    ...STATUSES.map((st): [string, FeedSong[]] => [STATUS_LABEL[st], feed.songs.filter((s) => !s.riffOnly && s.status === st)]),
+    ["Just riffs (not learning the whole song)", feed.songs.filter((s) => s.riffOnly)],
+  ];
+  for (const [title, group] of groups) {
     if (!group.length) continue;
-    lines.push(`## ${STATUS_LABEL[status]} (${group.length})`, "");
+    lines.push(`## ${title} (${group.length})`, "");
     for (const s of group) {
       const details = [
         s.instrument,

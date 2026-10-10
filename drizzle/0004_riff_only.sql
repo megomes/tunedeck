@@ -1,0 +1,1 @@
+ALTER TABLE "repertoire_entries" ADD COLUMN "riff_only" boolean DEFAULT false NOT NULL;
