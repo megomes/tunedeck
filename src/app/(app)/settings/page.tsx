@@ -50,6 +50,31 @@ function deviceName(ua: string | null) {
   return `${browser} on ${os}`;
 }
 
+/** Ready-to-paste instructions for a chat agent, with the Markdown link filled in. */
+function agentPrompt(url: string) {
+  return `Tenho uma biblioteca de músicas que eu toco no app TuneDeck.
+Ela está neste link, em Markdown, somente leitura e sempre atualizada:
+
+${url}
+
+Como ler:
+- Abra o link e leia o conteúdo inteiro antes de responder.
+  Se não conseguir acessar, me avise em vez de supor o conteúdo.
+- Cada música mostra título, artista, instrumento, afinação, capo, dificuldade (0–5),
+  tags e quantas vezes eu toquei.
+- Os status são:
+  - Want to Play: quero aprender
+  - Learning: estou praticando agora
+  - Can Play e Mastered: já toco
+  - Archived e Backlog: parado
+- Use só o que está no link como fonte do meu repertório.
+- Sempre que eu perguntar algo sobre as músicas que eu toco, consulte o link de novo,
+  porque ele muda.
+
+Confirme que leu respondendo só com o total de músicas e quantas há em cada status.
+Depois aguarde minha pergunta.`;
+}
+
 /** Secret read-only link to the repertoire, for AI agents (JSON or Markdown). */
 function AgentFeedSection() {
   const [token, setToken] = useState<string | null | undefined>(undefined);
@@ -76,12 +101,12 @@ function AgentFeedSection() {
   }
 
   const base = token ? `${window.location.origin}/api/feed/${token}` : "";
-  const copy = async (url: string) => {
+  const copy = async (text: string, what = "Link") => {
     try {
-      await navigator.clipboard.writeText(url);
-      toast("Link copied");
+      await navigator.clipboard.writeText(text);
+      toast(`${what} copied`);
     } catch {
-      prompt("Copy this link", url);
+      prompt(`Copy this ${what.toLowerCase()}`, text);
     }
   };
 
@@ -107,6 +132,13 @@ function AgentFeedSection() {
         </div>
         {token && (
           <>
+            <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy(agentPrompt(`${base}?format=md`), "Prompt")}>
+              <Bot />
+              <span className="grow">
+                Copy prompt for AI
+                <div className="meta">Instructions plus the link, ready to paste into a chat</div>
+              </span>
+            </button>
             <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy(`${base}?format=md`)}>
               <Copy />
               <span className="grow">
