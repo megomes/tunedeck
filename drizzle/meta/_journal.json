@@ -22,6 +22,13 @@
       "when": 1790538950918,
       "tag": "0002_jam",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791674935005,
+      "tag": "0003_riffs",
+      "breakpoints": true
     }
   ]
 }

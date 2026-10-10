@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Kanban, Plus, Settings, Tags, X } from "lucide-react";
+import { AudioLines, Kanban, Plus, Settings, Tags, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
@@ -16,10 +16,13 @@ import { Thumb } from "./Thumb";
 
 const NAV = [
   { href: "/", label: "Library", icon: Kanban },
+  { href: "/riffs", label: "Riffs", icon: Zap },
   { href: "/jam", label: "Jam", icon: AudioLines },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
+/** The phone bar has room for four; Tags stays reachable from Settings. */
+const PHONE_NAV = NAV.filter((n) => n.href !== "/tags");
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -135,7 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Toaster raised={hasDock} />
 
       <nav className="bottom-nav" aria-label="Main">
-        {NAV.slice(0, 2).map(({ href, label, icon: Icon }) => (
+        {PHONE_NAV.slice(0, 2).map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
             <Icon />
             {label}
@@ -146,7 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Plus />
           </Link>
         </div>
-        {NAV.slice(2).map(({ href, label, icon: Icon }) => (
+        {PHONE_NAV.slice(2).map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
             <Icon />
             {label}

@@ -78,6 +78,12 @@ and every YouTube original, cover, lesson and backing track, one tap away.
 - **Songsterr** is just a canonical HTTPS link (opens the app when installed). Pasting one best-effort
   reads the page title to prefill song/artist.
 
+- **Riffs.** Learn just a part of a song (intro, main riff, solo) with its own status, independent of
+  the song's. In the player, *Start here* / *End here* mark the riff in the playing video; each video
+  (original, cover, lesson) keeps its own mark, since the riff sits at a different time in each. A marked
+  riff loops in the embedded player (YouTube or the on-device player) with ±0.5s nudges. The `/riffs` tab
+  lists them by status, and *Warm up* plays a random riff you already know.
+
 - **Jam.** A separate library of YouTube backing tracks (`/jam`) with key, tempo, style and meter
   (read from the video title when possible, plus tap tempo). Filter by key/tempo/style, sort by plays,
   "Surprise me" picks a random one (favouring the least played), and the player suggests scales for the key.

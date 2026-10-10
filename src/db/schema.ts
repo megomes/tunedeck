@@ -79,6 +79,23 @@ export const resources = pgTable(
   (t) => [index("resources_entry_idx").on(t.repertoireEntryId)],
 );
 
+/** A part of a song learned on its own, with a start/end mark per video (keyed by resource id). */
+export const riffs = pgTable(
+  "riffs",
+  {
+    id: uuid("id").primaryKey(),
+    repertoireEntryId: uuid("repertoire_entry_id")
+      .notNull()
+      .references(() => repertoireEntries.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("LEARNING"),
+    marks: jsonb("marks").notNull().default({}),
+    createdAt: ts("created_at").notNull().defaultNow(),
+    updatedAt: ts("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("riffs_entry_idx").on(t.repertoireEntryId)],
+);
+
 export const tags = pgTable("tags", {
   id: uuid("id").primaryKey(),
   name: text("name").notNull(),

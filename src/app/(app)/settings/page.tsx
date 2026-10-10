@@ -61,7 +61,9 @@ Como ler:
 - Abra o link e leia o conteúdo inteiro antes de responder.
   Se não conseguir acessar, me avise em vez de supor o conteúdo.
 - Cada música mostra título, artista, instrumento, afinação, capo, dificuldade (0–5),
-  tags e quantas vezes eu toquei.
+  tags, riffs e quantas vezes eu toquei.
+- Riffs são partes de uma música (intro, solo…) que eu aprendo separadas,
+  com status próprio, independente do status da música.
 - Os status são:
   - Want to Play: quero aprender
   - Learning: estou praticando agora

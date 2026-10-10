@@ -5,6 +5,8 @@ import type {
   Entry,
   JamTrack,
   Instrument,
+  Riff,
+  RiffMark,
   Resource,
   ResourceType,
   Song,
@@ -386,4 +388,86 @@ export function playJamTrack(id: string) {
   const online = typeof navigator === "undefined" || navigator.onLine;
   if (tr.videoId && (online || hasLocalVideo(tr.videoId))) playJam(id);
   else openLink(tr.url);
+}
+
+// ---------- Riffs ----------
+
+function riff(id: string) {
+  return getState().data.riffs.find((r) => r.id === id);
+}
+
+/** A new riff, optionally already marked in the video that is playing. */
+export function createRiff(entryId: string, name: string, mark?: { resourceId: string; a: number }): string {
+  const t = now();
+  const r: Riff = {
+    id: uuid(),
+    repertoireEntryId: entryId,
+    name: name.trim() || "Riff",
+    status: "LEARNING",
+    marks: mark ? { [mark.resourceId]: { a: round(mark.a), b: null } } : {},
+    createdAt: t,
+    updatedAt: t,
+  };
+  dispatch({ t: "riff.upsert", riff: r });
+  return r.id;
+}
+
+export function updateRiff(id: string, patch: Partial<Pick<Riff, "name" | "status">>) {
+  const r = riff(id);
+  if (r) dispatch({ t: "riff.upsert", riff: { ...r, ...patch, updatedAt: now() } });
+}
+
+const round = (sec: number) => Math.max(0, Math.round(sec * 10) / 10);
+
+/**
+ * Sets the start (a) or end (b) of a riff in one video. A start past the end clears the end;
+ * an end before the start is refused (returns false).
+ */
+export function setRiffMark(id: string, resourceId: string, edge: keyof RiffMark, sec: number): boolean {
+  const r = riff(id);
+  if (!r) return false;
+  const prev = r.marks[resourceId];
+  const t = round(sec);
+  let next: RiffMark;
+  if (edge === "a") next = { a: t, b: prev?.b != null && prev.b > t + 0.2 ? prev.b : null };
+  else if (!prev || t <= prev.a + 0.2) {
+    toast("The end must come after the start");
+    return false;
+  } else next = { a: prev.a, b: t };
+  dispatch({ t: "riff.upsert", riff: { ...r, marks: { ...r.marks, [resourceId]: next }, updatedAt: now() } });
+  return true;
+}
+
+export function clearRiffMark(id: string, resourceId: string) {
+  const r = riff(id);
+  if (!r) return;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { [resourceId]: _, ...marks } = r.marks;
+  dispatch({ t: "riff.upsert", riff: { ...r, marks, updatedAt: now() } });
+}
+
+export function deleteRiff(id: string) {
+  const r = riff(id);
+  if (!r) return;
+  dispatch({ t: "riff.delete", id });
+  toast("Riff removed", { label: "Undo", run: () => dispatch({ t: "riff.upsert", riff: r }) });
+}
+
+/** Plays the riff in the given video (or its first marked one) and loops it once both ends are set. */
+export function playRiff(id: string, resourceId?: string) {
+  const r = riff(id);
+  if (!r) return false;
+  const resources = getState().data.resources.filter(
+    (x) => x.repertoireEntryId === r.repertoireEntryId && x.provider === "youtube" && x.externalId,
+  );
+  const target =
+    resources.find((x) => x.id === resourceId) ?? resources.find((x) => r.marks[x.id]?.b != null) ?? resources.find((x) => r.marks[x.id]);
+  if (!target) return false;
+  const online = typeof navigator === "undefined" || navigator.onLine;
+  if (!online && !hasLocalVideo(target.externalId!)) {
+    toast("This video isn't saved on this device");
+    return false;
+  }
+  playVideo(target.id, r.repertoireEntryId, r.id);
+  return true;
 }

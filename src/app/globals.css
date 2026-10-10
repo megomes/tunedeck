@@ -3532,3 +3532,66 @@ button.fact:hover {
     height: 44px;
   }
 }
+
+/* Riffs: parts of a song learned on their own, looped in the player */
+.riff-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.riff-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  background: var(--background-secondary);
+}
+.riff-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.riff-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.riff-marks,
+.riff-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.riff-marks .chip .meta {
+  font-variant-numeric: tabular-nums;
+}
+.riff-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.riff-panel .step-title {
+  margin: 0;
+}
+.riff-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: var(--background-secondary);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow var(--duration-fast) var(--ease);
+}
+.riff-row.active {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.riff-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

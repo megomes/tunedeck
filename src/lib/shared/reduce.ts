@@ -47,6 +47,7 @@ export function applyOp(s: Snapshot, op: Op): Snapshot {
         entryTags: s.entryTags.filter((t) => t.repertoireEntryId !== op.id),
         playEvents: s.playEvents.filter((p) => p.repertoireEntryId !== op.id),
         attachments: s.attachments.filter((a) => a.repertoireEntryId !== op.id),
+        riffs: (s.riffs ?? []).filter((r) => r.repertoireEntryId !== op.id),
       };
     }
 
@@ -144,5 +145,12 @@ export function applyOp(s: Snapshot, op: Op): Snapshot {
       const jamPlays = (s.jamPlays ?? []).filter((p) => p.id !== op.id);
       return { ...s, jamPlays, jamTracks: recomputeJam(s.jamTracks ?? [], jamPlays, op.trackId) };
     }
+
+    case "riff.upsert":
+      if (!s.entries.some((e) => e.id === op.riff.repertoireEntryId)) return s;
+      return { ...s, riffs: upsert(s.riffs ?? [], op.riff) };
+
+    case "riff.delete":
+      return { ...s, riffs: (s.riffs ?? []).filter((r) => r.id !== op.id) };
   }
 }

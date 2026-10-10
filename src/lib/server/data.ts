@@ -17,6 +17,7 @@ const {
   appSettings,
   jamTracks,
   jamPlays,
+  riffs,
 } = schema;
 
 const iso = (v: string | null) => (v ? new Date(v).toISOString() : null);
@@ -24,7 +25,7 @@ const isoReq = (v: string) => new Date(v).toISOString();
 
 export async function loadSnapshot(): Promise<Snapshot> {
   const d = db();
-  const [s, e, r, t, et, p, a, st, jt, jp] = await d.batch([
+  const [s, e, r, t, et, p, a, st, jt, jp, rf] = await d.batch([
     d.select().from(songs),
     d.select().from(entries),
     d.select().from(resources),
@@ -35,6 +36,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
     d.select().from(appSettings),
     d.select().from(jamTracks),
     d.select().from(jamPlays),
+    d.select().from(riffs),
   ]);
   const settings: Settings = {};
   for (const row of st) if (row.key !== FEED_TOKEN_KEY) settings[row.key] = row.value;
@@ -72,6 +74,13 @@ export async function loadSnapshot(): Promise<Snapshot> {
       updatedAt: isoReq(x.updatedAt),
     })),
     jamPlays: jp.map((x) => ({ ...x, playedAt: isoReq(x.playedAt) })),
+    riffs: rf.map((x) => ({
+      ...x,
+      status: x.status as Snapshot["riffs"][number]["status"],
+      marks: (x.marks ?? {}) as Snapshot["riffs"][number]["marks"],
+      createdAt: isoReq(x.createdAt),
+      updatedAt: isoReq(x.updatedAt),
+    })),
     settings,
   };
 }
@@ -221,6 +230,17 @@ async function opToQueries(op: Op, afterCommit: (() => Promise<void>)[]): Promis
       return [d.insert(jamPlays).values(op.play).onConflictDoNothing(), recomputeJam(op.play.trackId)];
     case "jamPlay.delete":
       return [d.delete(jamPlays).where(eq(jamPlays.id, op.id)), recomputeJam(op.trackId)];
+    case "riff.upsert": {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, createdAt, ...rest } = op.riff;
+      return [
+        d.insert(riffs)
+          .values({ ...op.riff, updatedAt: now })
+          .onConflictDoUpdate({ target: riffs.id, set: { ...rest, updatedAt: now } }),
+      ];
+    }
+    case "riff.delete":
+      return [d.delete(riffs).where(eq(riffs.id, op.id))];
     case "setting.set":
       // The feed token is managed by /api/feed only, never by synced ops or restored backups.
       if (op.key === FEED_TOKEN_KEY) return [];
