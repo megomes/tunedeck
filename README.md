@@ -68,6 +68,10 @@ and every YouTube original, cover, lesson and backing track, one tap away.
 - **Auth.** One access code → server checks `sha256(UPPERCASE(code))` against `ACCESS_CODE_HASH` →
   creates a device session row and sets a signed, HttpOnly, 400‑day cookie. The raw code is never stored.
   Settings lists devices and can sign out the others.
+- **AI agent link.** Settings → *AI agent link* creates a secret, read-only URL
+  (`/api/feed/<token>`, add `?format=md` for Markdown) with every song, its status, tuning, capo,
+  difficulty, tags and play count, to hand to an AI agent ("which pedal fits what I play?").
+  No videos, files or settings. Replace or turn it off at any time; the token is never synced or exported.
 - **YouTube enrichment** never blocks saving: the video ID and thumbnail are derived instantly, then
   `/api/enrich` fetches title/channel/duration (YouTube Data API if `YOUTUBE_API_KEY` is set, otherwise
   oEmbed + watch page), cached in the `media_cache` table. Failed/offline enrichments retry later.
