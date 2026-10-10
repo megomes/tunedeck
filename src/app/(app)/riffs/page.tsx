@@ -11,7 +11,7 @@ import { TopBar } from "@/components/TopBar";
 import { playRiff } from "@/lib/client/actions";
 import { useData, useLoaded } from "@/lib/client/store";
 import { useViews, type SongView } from "@/lib/client/views";
-import { STATUSES, STATUS_LABEL, type Riff, type Status } from "@/lib/shared/types";
+import { STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
 import { normalizeKey } from "@/lib/shared/urls";
 
 interface Item {
@@ -30,7 +30,14 @@ function RiffCard({ item }: { item: Item }) {
     if (!playRiff(riff.id)) router.push(`/song?id=${view.id}#riffs`);
   };
   return (
-    <div className="bcard jcard" onClick={open} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && open()}>
+    <div
+      className="bcard jcard riff-tab-card"
+      style={{ ["--rc" as string]: riffColor(riff) }}
+      onClick={open}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && open()}
+    >
       <div className="bcard-thumb">
         <div className="bcard-thumb-hit">
           <Thumb src={first?.thumbnailUrl ?? view.thumb} title={view.song.title}>
@@ -48,7 +55,9 @@ function RiffCard({ item }: { item: Item }) {
         </div>
       </div>
       <div className="bcard-main">
-        <span className="bcard-title clamp-2">{riff.name}</span>
+        <span className="bcard-title clamp-2">
+          <i className="riff-dot" /> {riff.name}
+        </span>
         <span className="secondary truncate">
           {view.song.title}
           {view.song.artist ? ` — ${view.song.artist}` : ""}

@@ -3533,7 +3533,16 @@ button.fact:hover {
   }
 }
 
-/* Riffs: parts of a song learned on their own, looped in the player */
+/* Riffs: parts of a song learned on their own, looped in the player.
+   Each riff has a color (--rc) used everywhere: timeline, chips, video strips, cards. */
+.riff-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rc);
+  flex-shrink: 0;
+}
 .riff-list {
   display: flex;
   flex-direction: column;
@@ -3546,6 +3555,7 @@ button.fact:hover {
   padding: 12px;
   border-radius: var(--radius-md);
   background: var(--background-secondary);
+  box-shadow: inset 3px 0 0 var(--rc);
 }
 .riff-row-head {
   display: flex;
@@ -3560,38 +3570,287 @@ button.fact:hover {
   font-weight: 600;
   text-align: left;
 }
-.riff-marks,
-.riff-row-actions {
+.riff-status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--background-tertiary);
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+.riff-status select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.riff-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.riff-strip {
+  position: relative;
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--background-tertiary);
+  overflow: hidden;
+}
+.riff-strip i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+}
+.riff-dots {
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.riff-dots i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.riff-tab-card {
+  box-shadow: inset 3px 0 0 var(--rc);
+}
+.riff-tab-card .riff-dot {
+  width: 8px;
+  height: 8px;
+  vertical-align: 1px;
+  margin-right: 2px;
+}
+
+/* Player: everything reachable with a pick in hand */
+.riffbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.riff-timeline {
+  position: relative;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--background-tertiary);
+  cursor: pointer;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+.rt-seg {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 5px;
+  opacity: 0.5;
+  color: #0a0a0a;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 0 5px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  transition: opacity var(--duration-fast) var(--ease), top var(--duration-fast) var(--ease), bottom var(--duration-fast) var(--ease);
+}
+.rt-seg.on {
+  opacity: 1;
+  top: 1px;
+  bottom: 1px;
+  box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 3px #fff;
+}
+.rt-seg.marking {
+  opacity: 0.8;
+  background-image: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.25) 0 6px, transparent 6px 12px) !important;
+  pointer-events: none;
+}
+.rt-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #fff;
+  pointer-events: none;
+  transition: left 0.2s linear;
+}
+.riff-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.riff-chips::-webkit-scrollbar {
+  display: none;
+}
+.riff-chip {
+  --rc: #888;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  max-width: 220px;
+  padding: 0 14px 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--background-tertiary);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+.riff-card .riff-chip {
+  height: 32px;
+  font-size: 12.5px;
+  font-weight: 500;
+  gap: 6px;
+}
+.riff-chip > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rc);
+  flex-shrink: 0;
+}
+.riff-chip svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+.riff-card .riff-chip svg {
+  color: var(--rc);
+}
+.riff-chip.on {
+  box-shadow: inset 0 0 0 1.5px var(--rc);
+  background: color-mix(in srgb, var(--rc) 18%, var(--background-tertiary));
+}
+.riff-chip.unmarked {
+  color: var(--text-tertiary);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px #333;
+}
+.riff-chip.unmarked.on {
+  box-shadow: inset 0 0 0 1.5px var(--rc);
+  color: var(--text-primary);
+}
+.riff-main-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+.riff-main {
+  flex: 1;
+  min-width: 0;
+  height: 58px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--background-elevated, #222);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px #333;
+  transition: transform var(--duration-fast) var(--ease), background var(--duration-fast) var(--ease);
+}
+.riff-main svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.riff-main:active {
+  transform: scale(0.98);
+}
+.riff-main.recording {
+  background: var(--accent);
+  box-shadow: none;
+  animation: riff-pulse 1.2s ease-in-out infinite;
+}
+.riff-main.recording svg {
+  color: #fff;
+}
+@keyframes riff-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(255, 45, 45, 0.25);
+  }
+}
+.riff-reps {
+  min-width: 72px;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--background-tertiary);
+}
+.riff-reps strong {
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.riff-reps span {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.riff-hint {
+  margin: -4px 0 0;
+  text-align: center;
+}
+.riff-adjust {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--background-secondary);
+  box-shadow: inset 3px 0 0 var(--rc);
+}
+.riff-adjust-name {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.riff-adjust-name i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--rc);
+  flex-shrink: 0;
+}
+.riff-adjust-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.riff-marks .chip .meta {
-  font-variant-numeric: tabular-nums;
+.riff-adjust-row .chip {
+  min-width: 40px;
+  justify-content: center;
 }
-.riff-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.riff-progress {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--background-tertiary);
+  overflow: hidden;
 }
-.riff-panel .step-title {
-  margin: 0;
-}
-.riff-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border-radius: var(--radius-md);
-  background: var(--background-secondary);
-  box-shadow: inset 0 0 0 1px transparent;
-  transition: box-shadow var(--duration-fast) var(--ease);
-}
-.riff-row.active {
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-.riff-time {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.riff-progress i {
+  display: block;
+  height: 100%;
+  background: var(--rc);
+  transition: width 0.2s linear;
 }

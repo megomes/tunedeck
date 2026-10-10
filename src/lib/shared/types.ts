@@ -189,10 +189,19 @@ export interface Riff {
   id: string;
   repertoireEntryId: string;
   name: string;
+  /** Same color in every video, on the timeline, chips and lists. */
+  color: string | null;
   status: Status;
   marks: Record<string, RiffMark>;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Riff colors, picked in order so riffs of one song never share one. */
+export const RIFF_COLORS = ["#3DB8FF", "#F5C542", "#4CC38A", "#E062D6", "#FF8A3D", "#7C6CFF", "#FF2D2D"];
+
+export function riffColor(r: Pick<Riff, "color">) {
+  return r.color ?? RIFF_COLORS[0];
 }
 
 export interface JamPlay {

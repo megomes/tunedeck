@@ -88,6 +88,7 @@ export const riffs = pgTable(
       .notNull()
       .references(() => repertoireEntries.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    color: text("color"),
     status: text("status").notNull().default("LEARNING"),
     marks: jsonb("marks").notNull().default({}),
     createdAt: ts("created_at").notNull().defaultNow(),

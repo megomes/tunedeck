@@ -13,7 +13,7 @@ import type {
   Status,
   Tag,
 } from "@/lib/shared/types";
-import { STATUS_LABEL } from "@/lib/shared/types";
+import { RIFF_COLORS, STATUS_LABEL } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 import { hasLocalVideo } from "./offline";
 import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
@@ -396,15 +396,20 @@ function riff(id: string) {
   return getState().data.riffs.find((r) => r.id === id);
 }
 
-/** A new riff, optionally already marked in the video that is playing. */
-export function createRiff(entryId: string, name: string, mark?: { resourceId: string; a: number }): string {
+const round = (sec: number) => Math.max(0, Math.round(sec * 10) / 10);
+
+/** A new riff with the next free color. Named "Riff N" when no name is given (rename later). */
+export function createRiff(entryId: string, name?: string, mark?: { resourceId: string; mark: RiffMark }): string {
+  const siblings = getState().data.riffs.filter((r) => r.repertoireEntryId === entryId);
+  const used = new Set(siblings.map((r) => r.color));
   const t = now();
   const r: Riff = {
     id: uuid(),
     repertoireEntryId: entryId,
-    name: name.trim() || "Riff",
+    name: name?.trim() || `Riff ${siblings.length + 1}`,
+    color: RIFF_COLORS.find((c) => !used.has(c)) ?? RIFF_COLORS[siblings.length % RIFF_COLORS.length],
     status: "LEARNING",
-    marks: mark ? { [mark.resourceId]: { a: round(mark.a), b: null } } : {},
+    marks: mark ? { [mark.resourceId]: { a: round(mark.mark.a), b: mark.mark.b == null ? null : round(mark.mark.b) } } : {},
     createdAt: t,
     updatedAt: t,
   };
@@ -416,8 +421,6 @@ export function updateRiff(id: string, patch: Partial<Pick<Riff, "name" | "statu
   const r = riff(id);
   if (r) dispatch({ t: "riff.upsert", riff: { ...r, ...patch, updatedAt: now() } });
 }
-
-const round = (sec: number) => Math.max(0, Math.round(sec * 10) / 10);
 
 /**
  * Sets the start (a) or end (b) of a riff in one video. A start past the end clears the end;
@@ -436,6 +439,14 @@ export function setRiffMark(id: string, resourceId: string, edge: keyof RiffMark
   } else next = { a: prev.a, b: t };
   dispatch({ t: "riff.upsert", riff: { ...r, marks: { ...r.marks, [resourceId]: next }, updatedAt: now() } });
   return true;
+}
+
+/** Writes a whole mark at once (both ends known, e.g. estimated from another video). */
+export function putRiffMark(id: string, resourceId: string, mark: RiffMark) {
+  const r = riff(id);
+  if (!r) return;
+  const next = { a: round(mark.a), b: mark.b == null ? null : round(mark.b) };
+  dispatch({ t: "riff.upsert", riff: { ...r, marks: { ...r.marks, [resourceId]: next }, updatedAt: now() } });
 }
 
 export function clearRiffMark(id: string, resourceId: string) {

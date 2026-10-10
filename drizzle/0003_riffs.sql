@@ -2,6 +2,7 @@ CREATE TABLE "riffs" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"repertoire_entry_id" uuid NOT NULL,
 	"name" text NOT NULL,
+	"color" text,
 	"status" text DEFAULT 'LEARNING' NOT NULL,
 	"marks" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

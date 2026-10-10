@@ -5,19 +5,45 @@ import { useState } from "react";
 import { createRiff, deleteRiff, openResource, playRiff, updateRiff } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import type { SongView } from "@/lib/client/views";
-import { RESOURCE_SHORT, STATUSES, STATUS_LABEL, type Riff } from "@/lib/shared/types";
+import { RESOURCE_SHORT, STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
 
 export function riffTime(sec: number) {
   const m = Math.floor(sec / 60);
   return `${m}:${(sec - m * 60).toFixed(1).padStart(4, "0")}`;
 }
 
+/** Thin bar under a video showing where each riff sits in it, in the riff's color. */
+export function RiffStrip({ riffs, resourceId, duration }: { riffs: Riff[]; resourceId: string; duration: number | null }) {
+  const marked = riffs.filter((r) => r.marks[resourceId]);
+  if (!marked.length || !duration) return null;
+  return (
+    <span className="riff-strip" aria-label={`Riffs: ${marked.map((r) => r.name).join(", ")}`}>
+      {marked.map((r) => {
+        const m = r.marks[resourceId];
+        const end = m.b ?? m.a;
+        return (
+          <i
+            key={r.id}
+            title={r.name}
+            style={{
+              left: `${(m.a / duration) * 100}%`,
+              width: `max(3px, ${((end - m.a) / duration) * 100}%)`,
+              background: riffColor(r),
+            }}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
 function RiffItem({ r, view }: { r: Riff; view: SongView }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const videos = view.resources.filter((x) => x.provider === "youtube" && x.externalId);
   return (
-    <div className="riff-card">
+    <div className="riff-card" style={{ ["--rc" as string]: riffColor(r) }}>
       <div className="riff-row-head">
+        <i className="riff-dot" />
         {renaming == null ? (
           <button className="riff-name truncate" title="Rename" onClick={() => setRenaming(r.name)}>
             {r.name}
@@ -31,21 +57,29 @@ function RiffItem({ r, view }: { r: Riff; view: SongView }) {
               setRenaming(null);
             }}
           >
-            <input className="input" style={{ height: 34 }} autoFocus value={renaming} onChange={(e) => setRenaming(e.target.value)} onBlur={(e) => e.currentTarget.form?.requestSubmit()} />
+            <input
+              className="input"
+              style={{ height: 34 }}
+              autoFocus
+              value={renaming}
+              onChange={(e) => setRenaming(e.target.value)}
+              onBlur={(e) => e.currentTarget.form?.requestSubmit()}
+            />
           </form>
         )}
+        <label className="riff-status">
+          <span className="status-badge" data-status={r.status} />
+          <select aria-label="Riff status" value={r.status} onChange={(e) => updateRiff(r.id, { status: e.target.value as Status })}>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </label>
         <button className="icon-btn sm muted" aria-label="Remove riff" onClick={() => deleteRiff(r.id)}>
           <Trash2 />
         </button>
-      </div>
-
-      <div className="seg-scroll" role="radiogroup" aria-label="Riff status">
-        {STATUSES.map((s) => (
-          <button key={s} role="radio" aria-checked={r.status === s} className={`seg ${r.status === s ? "active" : ""}`} onClick={() => updateRiff(r.id, { status: s })}>
-            <span className="status-badge" data-status={s} />
-            {STATUS_LABEL[s]}
-          </button>
-        ))}
       </div>
 
       {videos.length === 0 ? (
@@ -57,12 +91,12 @@ function RiffItem({ r, view }: { r: Riff; view: SongView }) {
             return (
               <button
                 key={v.id}
-                className={`chip sm ${m ? "" : "dim"}`}
-                onClick={() => (m ? playRiff(r.id, v.id) : openResource(v))}
-                title={m ? "Play and loop" : "Play this video and mark the riff in the player"}
+                className={`riff-chip ${m ? "" : "unmarked"}`}
+                onClick={() => (m ? playRiff(r.id, v.id) : (playRiff(r.id, v.id) || openResource(v)))}
+                title={m ? "Play and loop" : "Play this video and mark the riff with the big button"}
               >
-                {m?.b != null ? <Repeat /> : <Play />}
-                {v.customLabel || RESOURCE_SHORT[v.type]}
+                {m?.b != null ? <Repeat /> : m ? <Play /> : <Plus />}
+                <span>{v.customLabel || RESOURCE_SHORT[v.type]}</span>
                 <span className="meta">{m ? `${riffTime(m.a)}–${m.b != null ? riffTime(m.b) : "?"}` : "mark"}</span>
               </button>
             );
@@ -73,41 +107,36 @@ function RiffItem({ r, view }: { r: Riff; view: SongView }) {
   );
 }
 
-/** Song page: the riffs of this song, each with its own status and a mark per video. */
+/** Song page: the riffs of this song, each with its own status, color and a mark per video. */
 export function RiffsSection({ view }: { view: SongView }) {
   const data = useData();
-  const [name, setName] = useState("");
   const riffs = data.riffs.filter((r) => r.repertoireEntryId === view.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const firstVideo = view.resources.find((x) => x.provider === "youtube" && x.externalId);
   return (
     <section className="section" id="riffs">
       <div className="section-head">
         <h2 className="section-title">Riffs</h2>
+        <button className="link" onClick={() => createRiff(view.id)}>
+          <Plus /> Riff
+        </button>
       </div>
       <div className="riff-list">
         {riffs.map((r) => (
           <RiffItem key={r.id} r={r} view={view} />
         ))}
-        <form
-          className="row-gap"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            createRiff(view.id, name);
-            setName("");
-          }}
-        >
-          <input
-            className="input"
-            style={{ height: 40, borderRadius: 999 }}
-            placeholder={riffs.length ? "Another riff…" : "Learn just a part: Intro riff, Solo…"}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button className="btn btn-surface btn-sm" type="submit" disabled={!name.trim()}>
-            <Plus /> Riff
-          </button>
-        </form>
-        {riffs.length > 0 && <p className="meta" style={{ margin: 0 }}>Play a video and use Start here / End here in the player to mark it.</p>}
+        {riffs.length === 0 && (
+          <p className="meta" style={{ margin: 0 }}>
+            Learn just a part of this song.{" "}
+            {firstVideo ? (
+              <button className="link" onClick={() => openResource(firstVideo)}>
+                Play a video
+              </button>
+            ) : (
+              "Add a video"
+            )}{" "}
+            and tap <strong>Mark a riff</strong> where it starts and again where it ends.
+          </p>
+        )}
       </div>
     </section>
   );

@@ -1,20 +1,21 @@
 "use client";
 
-import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Repeat, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clearRiffMark, createRiff, jamPlayed, openLink, openResource, openSongsterr, playedOnce, setRiffMark } from "@/lib/client/actions";
+import { jamPlayed, openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
 import { useData } from "@/lib/client/store";
-import { closePlayer, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
+import { closePlayer, playVideo, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
-import { RESOURCE_LABEL, STATUS_LABEL, type RiffMark } from "@/lib/shared/types";
+import { RESOURCE_LABEL, riffColor } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
 import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
+import { RiffBar } from "./RiffBar";
 import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
 
@@ -85,135 +86,6 @@ const PLAYING = 1;
 function clock(sec: number) {
   const s = Math.round(sec);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-}
-
-/** Riff marks keep tenths: 1:05.5 */
-function clockFine(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = (sec - m * 60).toFixed(1).padStart(4, "0");
-  return `${m}:${s}`;
-}
-
-const NUDGE = 0.5;
-
-/** Riffs of the playing song: mark where each one starts and ends in this video, then loop it. */
-function RiffPanel({
-  entryId,
-  resourceId,
-  activeId,
-  setActive,
-  now,
-  seek,
-}: {
-  entryId: string;
-  resourceId: string;
-  activeId: string | null;
-  setActive: (id: string | null) => void;
-  now: () => number;
-  seek: (t: number) => void;
-}) {
-  const data = useData();
-  const [name, setName] = useState("");
-  const riffs = data.riffs.filter((r) => r.repertoireEntryId === entryId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-
-  const loop = (id: string, m: RiffMark) => {
-    setActive(id);
-    seek(m.a);
-  };
-
-  return (
-    <div className="riff-panel">
-      <p className="step-title">Riffs</p>
-      {riffs.map((r) => {
-        const m = r.marks[resourceId];
-        const on = activeId === r.id;
-        const complete = m && m.b != null;
-        return (
-          <div key={r.id} className={`riff-row ${on ? "active" : ""}`}>
-            <div className="riff-row-head">
-              <span className="status-badge" data-status={r.status} title={STATUS_LABEL[r.status]} />
-              <span className="riff-name truncate">{r.name}</span>
-              <span className="meta riff-time">{m ? `${clockFine(m.a)} – ${m.b != null ? clockFine(m.b) : "?"}` : "Not marked in this video"}</span>
-              <button
-                className={`chip sm ${on ? "active" : ""}`}
-                disabled={!complete}
-                aria-pressed={on}
-                onClick={() => (on ? setActive(null) : complete && loop(r.id, m))}
-              >
-                <Repeat /> {on ? "Looping" : "Loop"}
-              </button>
-            </div>
-            <div className="riff-row-actions">
-              <button
-                className="chip sm"
-                onClick={() => {
-                  // Another riff's loop would pull playback back before this one's end can be marked.
-                  if (!on) setActive(null);
-                  setRiffMark(r.id, resourceId, "a", now());
-                }}
-              >
-                Start here
-              </button>
-              <button
-                className="chip sm"
-                disabled={!m}
-                onClick={() => {
-                  const t = now();
-                  if (m && setRiffMark(r.id, resourceId, "b", t)) loop(r.id, { a: m.a, b: t });
-                }}
-              >
-                End here
-              </button>
-              {m && !on && (
-                <button className="chip sm dim" onClick={() => clearRiffMark(r.id, resourceId)}>
-                  <X className="x" /> Clear
-                </button>
-              )}
-            </div>
-            {on && complete && (
-              <div className="riff-row-actions">
-                <span className="meta">Start</span>
-                <button className="chip sm" aria-label="Start earlier" onClick={() => setRiffMark(r.id, resourceId, "a", m.a - NUDGE)}>
-                  −
-                </button>
-                <button className="chip sm" aria-label="Start later" onClick={() => setRiffMark(r.id, resourceId, "a", m.a + NUDGE)}>
-                  +
-                </button>
-                <span className="meta">End</span>
-                <button className="chip sm" aria-label="End earlier" onClick={() => setRiffMark(r.id, resourceId, "b", m.b! - NUDGE)}>
-                  −
-                </button>
-                <button className="chip sm" aria-label="End later" onClick={() => setRiffMark(r.id, resourceId, "b", m.b! + NUDGE)}>
-                  +
-                </button>
-              </div>
-            )}
-          </div>
-        );
-      })}
-      <form
-        className="row-gap"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim()) return;
-          setActive(null);
-          createRiff(entryId, name, { resourceId, a: now() });
-          setName("");
-        }}
-      >
-        <input
-          className="input"
-          style={{ height: 38, borderRadius: 999 }}
-          placeholder="New riff, starting here (Intro, Solo…)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button className="btn btn-surface btn-sm" type="submit" disabled={!name.trim()}>
-          <Plus /> Riff
-        </button>
-      </form>
-    </div>
-  );
 }
 
 /** What the player needs, whether it plays a song resource or a jam backing track. */
@@ -317,6 +189,7 @@ export function Player() {
   const [speed, setSpeed] = useState(1);
 
   // --- riff loop -----------------------------------------------------------
+  const entryRiffs = state?.kind === "resource" ? data.riffs.filter((r) => r.repertoireEntryId === state.entryId) : [];
   // The loop is whatever the active riff marks in the playing video, so editing a mark moves it live.
   const requestedRiff = state?.kind === "resource" ? (state.riffId ?? null) : null;
   const [riffId, setRiffId] = useState<string | null>(null);
@@ -340,13 +213,21 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedRiff, resource?.id]);
 
-  // Jump back to the start whenever playback reaches the end of the riff.
+  // Jump back to the start whenever playback reaches the end of the riff, counting each pass.
+  const [reps, setReps] = useState(0);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReps(0);
+  }, [riffId, resource?.id]);
   useEffect(() => {
     if (!loop) return;
     const id = setInterval(() => {
       const p = engine.current;
       const l = loopRef.current;
-      if (p && l && p.playing() && p.time() >= l.b) p.seek(l.a);
+      if (p && l && p.playing() && p.time() >= l.b) {
+        p.seek(l.a);
+        setReps((n) => n + 1);
+      }
     }, 40);
     return () => clearInterval(id);
   }, [!!loop]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -537,6 +418,11 @@ export function Player() {
           {/* Own player: its controls come first, right under (or beside) the video. */}
           {native && <div ref={setControlsHost} />}
 
+          {/* Riffs right under the video: the part used with the guitar in hand. */}
+          {view && resource && (
+            <RiffBar entryId={view.id} resource={resource} riffId={riffId} setRiffId={setRiffId} engine={engine} reps={reps} />
+          )}
+
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
               {media.title}
@@ -601,16 +487,7 @@ export function Player() {
 
           {jam && <JamInfo trackId={jam.id} />}
 
-          {view && resource && (
-            <RiffPanel
-              entryId={view.id}
-              resourceId={resource.id}
-              activeId={riffId}
-              setActive={setRiffId}
-              now={() => engine.current?.time() ?? 0}
-              seek={(t) => engine.current?.seek(t)}
-            />
-          )}
+
 
           {view && resource && (
             <>
@@ -627,7 +504,12 @@ export function Player() {
                   <p className="step-title">Versions</p>
                   <div className="list">
                     {view.resources.map((r) => (
-                      <button key={r.id} className={`pick ${r.id === resource.id ? "active" : ""}`} onClick={() => openResource(r)}>
+                      <button
+                        key={r.id}
+                        className={`pick ${r.id === resource.id ? "active" : ""}`}
+                        // Keep the selected riff: it loops in the other video too, or gets marked there.
+                        onClick={() => (riffId && r.provider === "youtube" && r.externalId ? playVideo(r.id, view.id, riffId) : openResource(r))}
+                      >
                         <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
                           {r.provider === "youtube" && <SourceBadge videoId={r.externalId} />}
                           {r.id === resource.id && (
@@ -645,6 +527,15 @@ export function Player() {
                           <span className="row-title truncate" style={{ fontWeight: 500, fontSize: 13.5 }}>
                             {r.title || hostLabel(r.url)}
                           </span>
+                          {entryRiffs.some((x) => x.marks[r.id]) && (
+                            <span className="riff-dots" aria-label="Riffs marked in this video">
+                              {entryRiffs
+                                .filter((x) => x.marks[r.id])
+                                .map((x) => (
+                                  <i key={x.id} style={{ background: riffColor(x) }} title={x.name} />
+                                ))}
+                            </span>
+                          )}
                         </span>
                       </button>
                     ))}

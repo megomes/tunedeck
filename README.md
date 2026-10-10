@@ -78,11 +78,15 @@ and every YouTube original, cover, lesson and backing track, one tap away.
 - **Songsterr** is just a canonical HTTPS link (opens the app when installed). Pasting one best-effort
   reads the page title to prefill song/artist.
 
-- **Riffs.** Learn just a part of a song (intro, main riff, solo) with its own status, independent of
-  the song's. In the player, *Start here* / *End here* mark the riff in the playing video; each video
-  (original, cover, lesson) keeps its own mark, since the riff sits at a different time in each. A marked
-  riff loops in the embedded player (YouTube or the on-device player) with ±0.5s nudges. The `/riffs` tab
-  lists them by status, and *Warm up* plays a random riff you already know.
+- **Riffs.** Learn just a part of a song (intro, main riff, solo) with its own status and color.
+  Built for hands on the guitar: in the player one big button marks a riff (tap at its start, tap
+  at its end, it loops; taps are shifted back 0.25s for reaction time), and **M** on a keyboard or pedal
+  does the same. A colored timeline under the video shows every riff in it; tap one to loop it, with a
+  loop counter and ±0.5s nudges. Each video keeps its own mark: switching versions keeps the riff
+  selected, a video of the same length (e.g. standard tuning) gets the timing copied, and any other
+  video needs one tap at the start, the end coming from the riff's length elsewhere. Video lists show
+  colored strips of where each riff sits. The `/riffs` tab groups them by status; *Warm up* plays a
+  random one you already know.
 
 - **Jam.** A separate library of YouTube backing tracks (`/jam`) with key, tempo, style and meter
   (read from the video title when possible, plus tap tempo). Filter by key/tempo/style, sort by plays,
@@ -111,6 +115,7 @@ on each device.
 cp .env.example .env.local   # fill in values
 npm install
 npm run db:migrate           # applies drizzle/ migrations to Neon
+                             # Vercel production builds run them too (`vercel-build`)
 npm run storage:cors         # once: lets the browser PUT/GET presigned URLs
 npm run dev
 ```
