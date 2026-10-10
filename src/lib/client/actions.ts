@@ -42,6 +42,8 @@ export interface NewSongInput {
   tagIds?: string[];
   /** Reuse an existing song (e.g. adding a Bass entry for a Guitar song). */
   songId?: string;
+  /** Just riffs, not the whole song: stays off the Library board. */
+  riffOnly?: boolean;
 }
 
 export function createSong(input: NewSongInput): string {
@@ -74,6 +76,7 @@ export function createSong(input: NewSongInput): string {
     playCount: 0,
     lastPlayedAt: null,
     isFavorite: false,
+    riffOnly: !!input.riffOnly,
     position: topPosition(input.status),
     createdAt: t,
     updatedAt: t,
@@ -112,6 +115,19 @@ export function setStatus(entryId: string, status: Status) {
   const e = entry(entryId);
   if (!e || e.status === status) return;
   moveEntry(entryId, status, topPosition(status, entryId));
+}
+
+/** Whole song ↔ just riffs. Riff-only songs leave the Library board and live in the Riffs tab. */
+export function setRiffOnly(entryId: string, riffOnly: boolean) {
+  const e = entry(entryId);
+  if (!e || !!e.riffOnly === riffOnly) return;
+  const prev = { riffOnly: !!e.riffOnly, position: e.position };
+  // Back on the board: at the top of its column.
+  updateEntry(entryId, riffOnly ? { riffOnly } : { riffOnly, position: topPosition(e.status, entryId) });
+  toast(riffOnly ? "Just riffs: moved off the Library to Riffs" : `Back on the Library in ${STATUS_LABEL[e.status]}`, {
+    label: "Undo",
+    run: () => updateEntry(entryId, prev),
+  });
 }
 
 export function toggleFavorite(entryId: string) {

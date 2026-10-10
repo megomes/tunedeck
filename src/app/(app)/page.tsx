@@ -159,7 +159,9 @@ function Board() {
   const params = useSearchParams();
   const loaded = useLoaded();
   const data = useData();
-  const views = useViews();
+  const allViews = useViews();
+  // Riff-only songs live in the Riffs tab, not on the board.
+  const views = useMemo(() => allViews.filter((v) => !v.entry.riffOnly), [allViews]);
 
   const [tuning, setTuning] = useState<string | null>(params.get("tuning"));
   const [tagIds, setTagIds] = useState<string[]>(params.get("tag") ? [params.get("tag")!] : []);

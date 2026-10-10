@@ -43,6 +43,8 @@ export const repertoireEntries = pgTable(
     playCount: integer("play_count").notNull().default(0),
     lastPlayedAt: ts("last_played_at"),
     isFavorite: boolean("is_favorite").notNull().default(false),
+    /** Only some riffs are learned, not the whole song: kept off the Library board, lives in Riffs. */
+    riffOnly: boolean("riff_only").notNull().default(false),
     /** Manual order inside its status column on the board (lower = higher up). */
     position: doublePrecision("position").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),

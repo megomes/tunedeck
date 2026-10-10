@@ -8,6 +8,7 @@ import { AttachmentsSection } from "@/components/Attachments";
 import { DifficultyInput } from "@/components/Difficulty";
 import { playableOf } from "@/components/BoardCard";
 import { LoadingList } from "@/components/Loading";
+import { LearnChips } from "@/components/Pickers";
 import { ResourcesSection } from "@/components/Resources";
 import { RiffsSection } from "@/components/Riffs";
 import { Thumb } from "@/components/Thumb";
@@ -19,6 +20,7 @@ import {
   openSongsterr,
   playedOnce,
   setEntryTags,
+  setRiffOnly,
   setStatus,
   toggleFavorite,
   updateEntry,
@@ -256,8 +258,10 @@ function SongDetail() {
           </div>
         </div>
         <div className="detail-res">
+          {/* Riff-only songs are all about their riffs: put them first. */}
+          {entry.riffOnly && <RiffsSection view={view} />}
           <ResourcesSection view={view} />
-          <RiffsSection view={view} />
+          {!entry.riffOnly && <RiffsSection view={view} />}
         </div>
         </div>
 
@@ -307,9 +311,15 @@ function SongDetail() {
             )}
 
             <div className="inline-field">
-              <span className="label">Status</span>
-              <StatusBar view={view} />
+              <span className="label">Learn</span>
+              <LearnChips riffOnly={!!entry.riffOnly} onChange={(riffOnly) => setRiffOnly(view.id, riffOnly)} />
             </div>
+            {!entry.riffOnly && (
+              <div className="inline-field">
+                <span className="label">Status</span>
+                <StatusBar view={view} />
+              </div>
+            )}
             {entry.instrument !== "piano" && (
               <div className="inline-field">
                 <span className="label">Tuning</span>

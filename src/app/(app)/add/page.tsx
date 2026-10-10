@@ -4,7 +4,7 @@ import { AlertTriangle, AudioLines, ClipboardPaste, ExternalLink, Guitar, Link2,
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { InstrumentChips, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
+import { InstrumentChips, LearnChips, StatusChips, TagPicker, TuningPicker } from "@/components/Pickers";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
 import { addResource, createSong, updateEntry } from "@/lib/client/actions";
@@ -50,6 +50,7 @@ interface NewSongState {
   status: Status;
   tuning: string | null;
   tagIds: string[];
+  riffOnly: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +161,7 @@ function SongPicker({ value, onChange }: { value: string | null; onChange: (id: 
             <span className="row-main">
               <span className="row-title truncate">{v.song.title}</span>
               <span className="meta truncate">
-                {v.song.artist} · {STATUS_LABEL[v.entry.status]}
+                {v.song.artist} · {v.entry.riffOnly ? "Just riffs" : STATUS_LABEL[v.entry.status]}
                 {v.entry.instrument !== "guitar" ? ` · ${INSTRUMENT_LABEL[v.entry.instrument]}` : ""}
               </span>
             </span>
@@ -225,6 +226,7 @@ function Add() {
     status: fromColumn && STATUSES.includes(fromColumn) ? fromColumn : ((data.settings.defaultStatus as Status) ?? "WANT_TO_PLAY"),
     tuning: "E Standard",
     tagIds: [],
+    riffOnly: params.get("riffs") === "1",
   }));
 
   function addUrls(urls: string[]) {
@@ -320,7 +322,7 @@ function Add() {
       });
     }
     toast(target === "new" ? "Song added" : `${links.length} link${links.length > 1 ? "s" : ""} added`);
-    router.replace(`/song?id=${entryId}`);
+    router.replace(`/song?id=${entryId}${target === "new" && song.riffOnly ? "#riffs" : ""}`);
   }
 
   const set = (patch: Partial<NewSongState>) => setSong((s) => ({ ...s, ...patch }));
@@ -466,9 +468,15 @@ function Add() {
               )}
 
               <div className="field">
-                <span className="label">Status</span>
-                <StatusChips value={song.status} onChange={(status) => set({ status })} />
+                <span className="label">Learn</span>
+                <LearnChips riffOnly={song.riffOnly} onChange={(riffOnly) => set({ riffOnly })} />
               </div>
+              {!song.riffOnly && (
+                <div className="field">
+                  <span className="label">Status</span>
+                  <StatusChips value={song.status} onChange={(status) => set({ status })} />
+                </div>
+              )}
               {song.instrument !== "piano" && (
                 <div className="field">
                   <span className="label">Tuning</span>
