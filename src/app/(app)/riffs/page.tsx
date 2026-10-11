@@ -2,41 +2,49 @@
 
 import { ChevronRight, Play, Plus, Search, Shuffle, X, Zap } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Kanban, type DragBits } from "@/components/Kanban";
 import { LoadingList } from "@/components/Loading";
 import { riffTime } from "@/components/Riffs";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
-import { openResource, playRiff } from "@/lib/client/actions";
+import { moveRiff, openResource, playRiff } from "@/lib/client/actions";
 import { useData, useLoaded } from "@/lib/client/store";
 import { useViews, type SongView } from "@/lib/client/views";
-import { STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
+import { riffColor, type Riff, type Status } from "@/lib/shared/types";
 import { normalizeKey } from "@/lib/shared/urls";
 
 interface Item {
+  id: string;
+  status: Status;
+  position: number;
+  createdAt: string;
   riff: Riff;
   view: SongView;
   /** Videos where both ends are marked, so the riff loops. */
   looped: number;
 }
 
-function RiffCard({ item }: { item: Item }) {
+function RiffCard({ item, drag, wasDragging }: { item: Item; drag: DragBits | null; wasDragging: () => boolean }) {
   const router = useRouter();
   const { riff, view } = item;
   const first = view.resources.find((r) => riff.marks[r.id]?.b != null) ?? view.resources.find((r) => riff.marks[r.id]);
   const m = first ? riff.marks[first.id] : undefined;
   const open = () => {
+    if (wasDragging()) return;
     if (!playRiff(riff.id)) router.push(`/song?id=${view.id}#riffs`);
   };
   return (
     <div
-      className="bcard jcard riff-tab-card"
-      style={{ ["--rc" as string]: riffColor(riff) }}
+      ref={drag?.dragRef}
+      style={{ ...drag?.style, ["--rc" as string]: riffColor(riff) }}
+      className={`bcard riff-tab-card ${drag ? "" : "overlay"} ${drag?.ghost ? "ghost" : ""}`}
       onClick={open}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && open()}
+      {...drag?.dragProps}
     >
       <div className="bcard-thumb">
         <div className="bcard-thumb-hit">
@@ -77,42 +85,27 @@ function RiffCard({ item }: { item: Item }) {
 }
 
 /** A riff-only song with no riff yet: open its video and mark the first one. */
-function PendingCard({ view }: { view: SongView }) {
+function PendingChip({ view }: { view: SongView }) {
   const router = useRouter();
   const video = view.resources.find((r) => r.provider === "youtube" && r.externalId);
-  const open = () => (video ? openResource(video) : router.push(`/song?id=${view.id}`));
   return (
-    <div className="bcard jcard riff-tab-card pending" onClick={open} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && open()}>
-      <div className="bcard-thumb">
-        <div className="bcard-thumb-hit">
-          <Thumb src={view.thumb} title={view.song.title}>
-            {video && (
-              <span className="bcard-play" aria-hidden>
-                <Play fill="currentColor" />
-              </span>
-            )}
-          </Thumb>
-        </div>
-      </div>
-      <div className="bcard-main">
-        <span className="bcard-title clamp-2">{view.song.title}</span>
-        <span className="secondary truncate">{view.song.artist}</span>
-        <span className="card-meta">{video ? "Play it and tap Mark a riff" : "Add a video to mark its riffs"}</span>
-      </div>
-      <div className="bcard-actions" onClick={(e) => e.stopPropagation()}>
-        <Link href={`/song?id=${view.id}#riffs`} className="icon-btn sm muted" aria-label="Open song">
-          <ChevronRight />
-        </Link>
-      </div>
-    </div>
+    <button className="riff-pending" onClick={() => (video ? openResource(video) : router.push(`/song?id=${view.id}`))}>
+      <Thumb src={view.thumb} title={view.song.title} />
+      <span className="row-main">
+        <span className="truncate" style={{ fontWeight: 600, fontSize: 13.5 }}>
+          {view.song.title}
+        </span>
+        <span className="meta truncate">{video ? "Play it and tap Mark a riff" : "Add a video to mark riffs"}</span>
+      </span>
+    </button>
   );
 }
 
-export default function RiffsPage() {
+function RiffsBoard() {
+  const params = useSearchParams();
   const data = useData();
   const views = useViews();
   const loaded = useLoaded();
-  const [status, setStatus] = useState<Status | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
@@ -121,17 +114,22 @@ export default function RiffsPage() {
     if (searchOpen) searchRef.current?.focus();
   }, [searchOpen]);
 
-  const items = useMemo(() => {
+  const all = useMemo(() => {
     const byId = new Map(views.map((v) => [v.id, v]));
     return data.riffs
-      .map((riff) => {
+      .map((riff): Item | null => {
         const view = byId.get(riff.repertoireEntryId);
         if (!view) return null;
         const looped = view.resources.filter((r) => riff.marks[r.id]?.b != null).length;
-        return { riff, view, looped };
+        return { id: riff.id, status: riff.status, position: riff.position ?? 0, createdAt: riff.createdAt, riff, view, looped };
       })
       .filter((x): x is Item => !!x);
   }, [data.riffs, views]);
+
+  const items = useMemo(() => {
+    const q = normalizeKey(query);
+    return q ? all.filter((i) => normalizeKey(`${i.riff.name} ${i.view.song.title} ${i.view.song.artist}`).includes(q)) : all;
+  }, [all, query]);
 
   // Riff-only songs that have no riff yet would otherwise be nowhere.
   const pending = useMemo(
@@ -139,15 +137,8 @@ export default function RiffsPage() {
     [views, data.riffs],
   );
 
-  const filtered = useMemo(() => {
-    const q = normalizeKey(query);
-    return items
-      .filter((i) => (!status || i.riff.status === status) && (!q || normalizeKey(`${i.riff.name} ${i.view.song.title} ${i.view.song.artist}`).includes(q)))
-      .sort((a, b) => b.riff.updatedAt.localeCompare(a.riff.updatedAt));
-  }, [items, status, query]);
-
   /** Warm-up: a random riff you already play, in a video where it loops. */
-  const known = filtered.filter((i) => (i.riff.status === "CAN_PLAY" || i.riff.status === "MASTERED") && i.looped);
+  const known = all.filter((i) => (i.status === "CAN_PLAY" || i.status === "MASTERED") && i.looped);
   const surprise = () => {
     const pick = known[Math.floor(Math.random() * known.length)];
     if (pick) playRiff(pick.riff.id);
@@ -181,7 +172,7 @@ export default function RiffsPage() {
       </>
     );
   }
-  if (!items.length && !pending.length) {
+  if (!all.length && !pending.length) {
     return (
       <>
         <TopBar title="Riffs" />
@@ -199,65 +190,53 @@ export default function RiffsPage() {
     );
   }
 
-  const groups = STATUSES.map((s) => ({ s, list: filtered.filter((i) => i.riff.status === s) })).filter((g) => g.list.length);
-  const counts = new Map(STATUSES.map((s) => [s, items.filter((i) => i.riff.status === s).length]));
-
   return (
     <>
       <TopBar title="Riffs" actions={actions} />
-      <div className="container">
-        {searchOpen && (
-          <div className="input-icon" style={{ margin: "12px 0 0" }}>
-            <Search />
-            <input ref={searchRef} className="input search" placeholder="Search riff, song or artist" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
-        )}
-
-        <div className="chip-row mt-3">
-          <button className={`chip ${status == null ? "active" : ""}`} onClick={() => setStatus(null)}>
-            All {items.length}
-          </button>
-          {STATUSES.filter((s) => counts.get(s)).map((s) => (
-            <button key={s} className={`chip ${status === s ? "active" : ""}`} onClick={() => setStatus(status === s ? null : s)}>
-              <span className="status-badge" data-status={s} />
-              {STATUS_LABEL[s]} {counts.get(s)}
-            </button>
-          ))}
-        </div>
-
-        {pending.length > 0 && !status && !query && (
-          <section className="section">
-            <p className="step-title">No riff marked yet · {pending.length}</p>
-            <div className="jam-grid">
-              {pending.map((v) => (
-                <PendingCard key={v.id} view={v} />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {groups.length === 0 ? (
-          pending.length ? null : (
-          <div className="empty">
-            <Zap />
-            <h3>No riffs match</h3>
-          </div>
-          )
-        ) : (
-          groups.map((g) => (
-            <section key={g.s} className="section">
-              <p className="step-title">
-                {STATUS_LABEL[g.s]} · {g.list.length}
-              </p>
-              <div className="jam-grid">
-                {g.list.map((i) => (
-                  <RiffCard key={i.riff.id} item={i} />
-                ))}
+      <Kanban
+        items={items}
+        all={all}
+        onMove={moveRiff}
+        emptyLabel="Drop riffs here"
+        initialStatus={params.get("status") as Status | null}
+        renderCard={(item, drag, wasDragging) => <RiffCard item={item} drag={drag} wasDragging={wasDragging} />}
+        filters={
+          <>
+            {searchOpen && (
+              <div className="input-icon" style={{ marginBottom: 10 }}>
+                <Search />
+                <input
+                  ref={searchRef}
+                  className="input search"
+                  placeholder="Search riff, song or artist"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
               </div>
-            </section>
-          ))
-        )}
-      </div>
+            )}
+            {pending.length > 0 && !query && (
+              <div className="riff-pending-row">
+                <span className="step-title" style={{ margin: 0 }}>
+                  No riff marked yet
+                </span>
+                <div className="riff-pending-list">
+                  {pending.map((v) => (
+                    <PendingChip key={v.id} view={v} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        }
+      />
     </>
+  );
+}
+
+export default function RiffsPage() {
+  return (
+    <Suspense>
+      <RiffsBoard />
+    </Suspense>
   );
 }

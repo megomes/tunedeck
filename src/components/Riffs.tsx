@@ -2,7 +2,7 @@
 
 import { Play, Plus, Repeat, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { createRiff, deleteRiff, openResource, playRiff, updateRiff } from "@/lib/client/actions";
+import { createRiff, deleteRiff, openResource, playRiff, setRiffStatus, updateRiff } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import type { SongView } from "@/lib/client/views";
 import { RESOURCE_SHORT, STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
@@ -37,6 +37,22 @@ export function RiffStrip({ riffs, resourceId, duration }: { riffs: Riff[]; reso
   );
 }
 
+/** Compact status picker for one riff (song page, player). */
+export function RiffStatusSelect({ r }: { r: Riff }) {
+  return (
+    <label className="riff-status">
+      <span className="status-badge" data-status={r.status} />
+      <select aria-label="Riff status" value={r.status} onChange={(e) => setRiffStatus(r.id, e.target.value as Status)}>
+        {STATUSES.map((s) => (
+          <option key={s} value={s}>
+            {STATUS_LABEL[s]}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function RiffItem({ r, view }: { r: Riff; view: SongView }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const videos = view.resources.filter((x) => x.provider === "youtube" && x.externalId);
@@ -67,16 +83,7 @@ function RiffItem({ r, view }: { r: Riff; view: SongView }) {
             />
           </form>
         )}
-        <label className="riff-status">
-          <span className="status-badge" data-status={r.status} />
-          <select aria-label="Riff status" value={r.status} onChange={(e) => updateRiff(r.id, { status: e.target.value as Status })}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </label>
+        <RiffStatusSelect r={r} />
         <button className="icon-btn sm muted" aria-label="Remove riff" onClick={() => deleteRiff(r.id)}>
           <Trash2 />
         </button>

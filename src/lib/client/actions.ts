@@ -425,6 +425,7 @@ export function createRiff(entryId: string, name?: string, mark?: { resourceId: 
     name: name?.trim() || `Riff ${siblings.length + 1}`,
     color: RIFF_COLORS.find((c) => !used.has(c)) ?? RIFF_COLORS[siblings.length % RIFF_COLORS.length],
     status: "LEARNING",
+    position: riffTop("LEARNING"),
     marks: mark ? { [mark.resourceId]: { a: round(mark.mark.a), b: mark.mark.b == null ? null : round(mark.mark.b) } } : {},
     createdAt: t,
     updatedAt: t,
@@ -433,9 +434,38 @@ export function createRiff(entryId: string, name?: string, mark?: { resourceId: 
   return r.id;
 }
 
-export function updateRiff(id: string, patch: Partial<Pick<Riff, "name" | "status">>) {
+export function updateRiff(id: string, patch: Partial<Pick<Riff, "name" | "position">>) {
   const r = riff(id);
   if (r) dispatch({ t: "riff.upsert", riff: { ...r, ...patch, updatedAt: now() } });
+}
+
+/** Position that puts a riff at the top of a column on the Riffs board. */
+function riffTop(status: Status, except?: string) {
+  const col = getState().data.riffs.filter((r) => r.status === status && r.id !== except);
+  return col.length ? Math.min(...col.map((r) => r.position ?? 0)) - 1 : 0;
+}
+
+/** Moves a riff on the Riffs board: new column and/or new manual position. */
+export function moveRiff(id: string, status: Status, position: number) {
+  const r = riff(id);
+  if (!r || (r.status === status && r.position === position)) return;
+  const prev = { status: r.status, position: r.position };
+  dispatch({ t: "riff.upsert", riff: { ...r, status, position, updatedAt: now() } });
+  if (prev.status !== status) {
+    toast(`${r.name}: ${STATUS_LABEL[status]}`, {
+      label: "Undo",
+      run: () => {
+        const cur = riff(id);
+        if (cur) dispatch({ t: "riff.upsert", riff: { ...cur, ...prev, updatedAt: now() } });
+      },
+    });
+  }
+}
+
+/** Status change outside the board: the riff lands at the top of its new column. */
+export function setRiffStatus(id: string, status: Status) {
+  const r = riff(id);
+  if (r && r.status !== status) moveRiff(id, status, riffTop(status, id));
 }
 
 /**

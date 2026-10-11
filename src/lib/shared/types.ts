@@ -195,6 +195,8 @@ export interface Riff {
   color: string | null;
   status: Status;
   marks: Record<string, RiffMark>;
+  /** Manual order inside its status column on the Riffs board (lower = higher up). */
+  position?: number;
   createdAt: string;
   updatedAt: string;
 }
