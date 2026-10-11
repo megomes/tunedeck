@@ -439,6 +439,19 @@ export function updateRiff(id: string, patch: Partial<Pick<Riff, "name" | "posit
   if (r) dispatch({ t: "riff.upsert", riff: { ...r, ...patch, updatedAt: now() } });
 }
 
+/** Renames a riff; a name another riff of the song already has gets a number (Solo 2). */
+export function renameRiff(id: string, name: string) {
+  const r = riff(id);
+  const clean = name.trim();
+  if (!r || !clean) return;
+  const taken = new Set(
+    getState().data.riffs.filter((x) => x.repertoireEntryId === r.repertoireEntryId && x.id !== id).map((x) => x.name.toLowerCase()),
+  );
+  let next = clean;
+  for (let n = 2; taken.has(next.toLowerCase()); n++) next = `${clean} ${n}`;
+  updateRiff(id, { name: next });
+}
+
 /** Position that puts a riff at the top of a column on the Riffs board. */
 function riffTop(status: Status, except?: string) {
   const col = getState().data.riffs.filter((r) => r.status === status && r.id !== except);
@@ -535,7 +548,7 @@ export function clearRiffMark(id: string, resourceId: string) {
 
 export function deleteRiff(id: string) {
   const r = riff(id);
-  if (!r) return;
+  if (!r || !confirm(`Delete the riff "${r.name}"? Its marks in every video go too.`)) return;
   dispatch({ t: "riff.delete", id });
   toast("Riff removed", { label: "Undo", run: () => dispatch({ t: "riff.upsert", riff: r }) });
 }

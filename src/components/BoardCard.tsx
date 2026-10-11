@@ -6,6 +6,8 @@ import type { CSSProperties, HTMLAttributes, Ref } from "react";
 import { openResource, openSongsterr } from "@/lib/client/actions";
 import { timeAgo } from "@/lib/client/format";
 import { primaryOf, type SongView } from "@/lib/client/views";
+import { songMenu } from "./CardMenus";
+import { contextMenu } from "./ContextMenu";
 import { DifficultyMeter } from "./Difficulty";
 import { PlusOne } from "./PlusOne";
 import { SourceBadge } from "./SourceBadge";
@@ -54,6 +56,7 @@ export function BoardCard({
       role="link"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && open()}
+      onContextMenu={overlay ? undefined : contextMenu(() => songMenu(view, video, router.push))}
       {...dragProps}
     >
       <div className="bcard-thumb">

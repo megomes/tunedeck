@@ -1,13 +1,15 @@
 "use client";
 
-import { Circle, LogOut, Pause, Play, Plus, Repeat, RotateCcw, SkipBack, Square } from "lucide-react";
+import { Circle, LogOut, Pause, Pencil, Play, Plus, Repeat, RotateCcw, SkipBack, Square } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createRiff, placeSameRecording, putRiffMark, setRiffMark } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import { toast } from "@/lib/client/ui";
 import { RESOURCE_SHORT, riffColor, type Resource, type Riff, type RiffMark } from "@/lib/shared/types";
+import { contextMenu } from "./ContextMenu";
 import type { Engine } from "./NativeVideo";
-import { RiffStatusSelect, riffTime } from "./Riffs";
+import { riffMenu } from "./RiffMenu";
+import { RiffNamePicker, RiffStatusSelect, riffTime } from "./Riffs";
 
 /** Taps land a bit late: shift marks back by a typical reaction time. */
 const REACTION = 0.25;
@@ -45,12 +47,19 @@ export function RiffBar({
   /** Marking in progress: start is set, waiting for the end. riffId null = a new riff. */
   const [marking, setMarking] = useState<{ riffId: string | null; a: number } | null>(null);
   const drag = useRef<{ x: number; moved: boolean; at: number } | null>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef<HTMLDivElement>(null);
+  /** Ends of the selected riff while a handle is being dragged (saved on release). */
+  const [edit, setEdit] = useState<{ a: number; b: number } | null>(null);
+  /** Riff whose name picker is open (opens by itself right after a new riff is marked). */
+  const [namingId, setNamingId] = useState<string | null>(null);
   /** "Re-mark": the next tap starts marking this riff by hand. */
   const [armed, setArmed] = useState<string | null>(null);
 
   const selected = riffs.find((r) => r.id === riffId);
   const selMark = selected?.marks[resource.id];
   const looping = !!selected && selMark?.b != null;
+  const naming = !!selected && namingId === selected.id;
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -107,6 +116,7 @@ export function RiffBar({
       const mark = { a: marking.a, b: t };
       const id = marking.riffId ?? createRiff(entryId, undefined, { resourceId: resource.id, mark });
       if (marking.riffId) putRiffMark(id, resource.id, mark);
+      else setNamingId(id);
       setMarking(null);
       startLoop(id, mark);
       return;
@@ -193,9 +203,51 @@ export function RiffBar({
   const d = clock.d || 1;
   const pct = (sec: number) => `${Math.min(100, Math.max(0, (sec / d) * 100))}%`;
 
+  // The selected riff's ends as shown: live while a handle is dragged.
+  const range = edit ?? (selMark?.b != null ? { a: selMark.a, b: selMark.b } : null);
+  // Zoomed ruler around the selected riff; fixed during a drag (it follows the saved mark).
+  const pad = selMark?.b != null ? Math.max(1.5, (selMark.b - selMark.a) * 0.5) : 0;
+  const zoom = selMark?.b != null ? { lo: Math.max(0, selMark.a - pad), hi: Math.min(d, selMark.b + pad) } : null;
+  const zpct = (sec: number) => (zoom ? `${Math.min(100, Math.max(0, ((sec - zoom.lo) / (zoom.hi - zoom.lo || 1)) * 100))}%` : "0%");
+
+  /** Drag a start/end handle on the timeline or on the zoomed ruler. */
+  const startDrag = (e: React.PointerEvent, edge: "a" | "b", ruler: "timeline" | "zoom") => {
+    if (!selected || selMark?.b == null) return;
+    const box = (ruler === "zoom" ? zoomRef : timelineRef).current?.getBoundingClientRect();
+    if (!box) return;
+    const lo = ruler === "zoom" && zoom ? zoom.lo : 0;
+    const span = ruler === "zoom" && zoom ? zoom.hi - zoom.lo : d;
+    const toTime = (x: number) => lo + ((x - box.left) / box.width) * span;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+    const id = selected.id;
+    let cur = { a: selMark.a, b: selMark.b };
+    const move = (ev: PointerEvent) => {
+      const t = Math.round(toTime(ev.clientX) * 10) / 10;
+      cur = edge === "a" ? { a: Math.min(Math.max(0, t), cur.b - 0.3), b: cur.b } : { a: cur.a, b: Math.max(Math.min(d, t), cur.a + 0.3) };
+      setEdit(cur);
+    };
+    const end = () => {
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", end);
+      target.removeEventListener("pointercancel", end);
+      putRiffMark(id, resource.id, cur);
+      setEdit(null);
+      // Hear the change: from the new start, or the last moments before the new end.
+      seek(edge === "a" ? cur.a : Math.max(cur.a, cur.b - 1.5));
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", end);
+    target.addEventListener("pointercancel", end);
+  };
+
+
   return (
     <div className="riffbar">
       <div
+        ref={timelineRef}
         className="riff-timeline"
         role="slider"
         aria-label="Riffs in this video"
@@ -234,15 +286,17 @@ export function RiffBar({
         onPointerCancel={() => (drag.current = null)}
       >
         {riffs.map((r) => {
-          const m = r.marks[resource.id];
-          if (!m) return null;
+          const saved = r.marks[resource.id];
+          if (!saved) return null;
           const on = r.id === riffId;
+          const m = on && range ? range : saved;
           return (
             <button
               key={r.id}
               className={`rt-seg ${on ? "on" : ""}`}
               style={{ left: pct(m.a), width: m.b != null ? `max(10px, ${pct(m.b - m.a)})` : "4px", background: riffColor(r) }}
               aria-label={`${r.name} ${riffTime(m.a)}`}
+              onContextMenu={contextMenu(() => riffMenu(r.id, { resourceId: resource.id }))}
               onClick={(e) => {
                 e.stopPropagation();
                 tapChip(r);
@@ -263,6 +317,12 @@ export function RiffBar({
           />
         )}
         <span className="rt-head" style={{ left: pct(clock.t) }} />
+        {range && selected && (
+          <>
+            <span className="rt-handle" style={{ left: pct(range.a) }} aria-label="Drag the start" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => startDrag(e, "a", "timeline")} />
+            <span className="rt-handle" style={{ left: pct(range.b) }} aria-label="Drag the end" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => startDrag(e, "b", "timeline")} />
+          </>
+        )}
       </div>
 
       {riffs.length > 0 && (
@@ -277,6 +337,7 @@ export function RiffBar({
                 style={{ ["--rc" as string]: riffColor(r) }}
                 aria-pressed={on}
                 onClick={() => tapChip(r)}
+                onContextMenu={contextMenu(() => riffMenu(r.id, { resourceId: resource.id }))}
               >
                 <i />
                 <span className="truncate">{r.name}</span>
@@ -304,14 +365,10 @@ export function RiffBar({
       {selected && (
         <div className="riff-adjust" style={{ ["--rc" as string]: riffColor(selected) }}>
           <div className="riff-adjust-head">
-            <span className="riff-adjust-name truncate">
+            <button className="riff-adjust-name truncate" title="Rename" onClick={() => setNamingId(naming ? null : selected.id)}>
               <i /> {selected.name}
-              {selMark?.b != null && (
-                <span className="meta">
-                  {riffTime(selMark.a)}–{riffTime(selMark.b)}
-                </span>
-              )}
-            </span>
+              <Pencil className="riff-rename" />
+            </button>
             <RiffStatusSelect r={selected} />
             {looping && (
               <span className="riff-reps" aria-label={`${reps} loops`}>
@@ -319,12 +376,27 @@ export function RiffBar({
               </span>
             )}
           </div>
-          {looping && selMark && (
+          {naming && <RiffNamePicker r={selected} onDone={() => setNamingId(null)} />}
+          {looping && selMark && range && zoom && (
             <>
-              {/* Zoomed in on the loop: where the playhead is inside the riff. */}
-              <span className="riff-progress" aria-hidden>
-                <i style={{ width: `${Math.min(100, Math.max(0, ((clock.t - selMark.a) / Math.max(0.1, selMark.b! - selMark.a)) * 100))}%` }} />
-              </span>
+              {/* Zoomed ruler around the riff: drag its ends precisely, see the playhead inside it. */}
+              <div
+                ref={zoomRef}
+                className="riff-zoom"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  engine.current?.seek(zoom.lo + ((e.clientX - r.left) / r.width) * (zoom.hi - zoom.lo));
+                }}
+              >
+                <span className="rz-range" style={{ left: zpct(range.a), width: `calc(${zpct(range.b)} - ${zpct(range.a)})` }} />
+                <span className="rt-head" style={{ left: zpct(clock.t) }} />
+                <span className="rz-handle" style={{ left: zpct(range.a) }} aria-label="Drag the start" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => startDrag(e, "a", "zoom")}>
+                  <b>{riffTime(range.a)}</b>
+                </span>
+                <span className="rz-handle end" style={{ left: zpct(range.b) }} aria-label="Drag the end" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => startDrag(e, "b", "zoom")}>
+                  <b>{riffTime(range.b)}</b>
+                </span>
+              </div>
               <div className="riff-adjust-row">
                 <span className="meta">Start</span>
                 <button className="chip" aria-label="Start earlier" onClick={() => setRiffMark(selected.id, resource.id, "a", selMark.a - NUDGE)}>

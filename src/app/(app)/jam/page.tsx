@@ -4,6 +4,8 @@ import { AudioLines, ClipboardPaste, Pencil, Play, Plus, Search, Shuffle, Star, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { jamMenu } from "@/components/CardMenus";
+import { contextMenu } from "@/components/ContextMenu";
 import { LoadingList } from "@/components/Loading";
 import { SourceBadge } from "@/components/SourceBadge";
 import { Thumb } from "@/components/Thumb";
@@ -32,9 +34,17 @@ const keyOrder = (k: string) => {
 };
 
 function JamCard({ t }: { t: JamTrack }) {
+  const router = useRouter();
   const facts = [t.bpm ? `${t.bpm} BPM` : null, t.style, t.timeSignature && t.timeSignature !== "4/4" ? t.timeSignature : null].filter(Boolean);
   return (
-    <div className="bcard jcard" onClick={() => playJamTrack(t.id)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && playJamTrack(t.id)}>
+    <div
+      className="bcard jcard"
+      onClick={() => playJamTrack(t.id)}
+      onContextMenu={contextMenu(() => jamMenu(t.id, router.push))}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && playJamTrack(t.id)}
+    >
       <div className="bcard-thumb">
         <div className="bcard-thumb-hit">
           <Thumb src={t.thumbnailUrl} title={t.title}>
