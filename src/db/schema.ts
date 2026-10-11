@@ -93,6 +93,8 @@ export const riffs = pgTable(
     color: text("color"),
     status: text("status").notNull().default("LEARNING"),
     marks: jsonb("marks").notNull().default({}),
+    /** Manual order inside its status column on the Riffs board (lower = higher up). */
+    position: doublePrecision("position").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },

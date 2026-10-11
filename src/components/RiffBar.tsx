@@ -1,13 +1,13 @@
 "use client";
 
-import { Circle, LogOut, Pause, Play, Plus, Repeat, RotateCcw, Square } from "lucide-react";
+import { Circle, LogOut, Pause, Play, Plus, Repeat, RotateCcw, SkipBack, Square } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createRiff, placeSameRecording, putRiffMark, setRiffMark } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import { toast } from "@/lib/client/ui";
 import { RESOURCE_SHORT, riffColor, type Resource, type Riff, type RiffMark } from "@/lib/shared/types";
 import type { Engine } from "./NativeVideo";
-import { riffTime } from "./Riffs";
+import { RiffStatusSelect, riffTime } from "./Riffs";
 
 /** Taps land a bit late: shift marks back by a typical reaction time. */
 const REACTION = 0.25;
@@ -67,6 +67,13 @@ export function RiffBar({
   }, [resource.id]);
 
   const now = () => engine.current?.time() ?? 0;
+  /** Back to the start of the looping riff, playing. */
+  const restart = () => {
+    if (!selMark) return;
+    seek(selMark.a);
+    engine.current?.play();
+  };
+
   const togglePlay = () => {
     const e = engine.current;
     if (!e) return;
@@ -284,53 +291,67 @@ export function RiffBar({
         <button className="riff-play" aria-label={clock.playing ? "Pause" : "Play"} onClick={togglePlay}>
           {clock.playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
         </button>
+        <button className="riff-play" aria-label="Back to the start of the riff" disabled={!looping} onClick={restart}>
+          <SkipBack fill="currentColor" />
+        </button>
         <button className={`riff-main ${marking ? "recording" : ""}`} onClick={main}>
           {marking ? <Square fill="currentColor" /> : looping ? <LogOut /> : <Circle fill="currentColor" />}
           <span className="truncate">{mainLabel}</span>
         </button>
-        {looping && (
-          <div className="riff-reps" aria-label={`${reps} loops`}>
-            <strong>×{reps}</strong>
-            <span>loops</span>
-          </div>
-        )}
       </div>
       {mainHint && <p className="meta riff-hint">{mainHint}</p>}
 
-      {looping && selected && selMark && (
+      {selected && (
         <div className="riff-adjust" style={{ ["--rc" as string]: riffColor(selected) }}>
-          <span className="riff-adjust-name truncate">
-            <i /> {selected.name} · {riffTime(selMark.a)}–{riffTime(selMark.b!)}
-          </span>
-          {/* Zoomed in on the loop: where the playhead is inside the riff. */}
-          <span className="riff-progress" aria-hidden>
-            <i style={{ width: `${Math.min(100, Math.max(0, ((clock.t - selMark.a) / Math.max(0.1, selMark.b! - selMark.a)) * 100))}%` }} />
-          </span>
-          <div className="riff-adjust-row">
-            <span className="meta">Start</span>
-            <button className="chip" aria-label="Start earlier" onClick={() => setRiffMark(selected.id, resource.id, "a", selMark.a - NUDGE)}>
-              −
-            </button>
-            <button className="chip" aria-label="Start later" onClick={() => setRiffMark(selected.id, resource.id, "a", selMark.a + NUDGE)}>
-              +
-            </button>
-            <span className="meta">End</span>
-            <button className="chip" aria-label="End earlier" onClick={() => setRiffMark(selected.id, resource.id, "b", selMark.b! - NUDGE)}>
-              −
-            </button>
-            <button className="chip" aria-label="End later" onClick={() => setRiffMark(selected.id, resource.id, "b", selMark.b! + NUDGE)}>
-              +
-            </button>
-            <button
-              className="chip"
-              onClick={() => {
-                setRiffId(null);
-                setArmed(selected.id);
-              }}
-            >
-              <RotateCcw /> Re-mark
-            </button>
+          <div className="riff-adjust-head">
+            <span className="riff-adjust-name truncate">
+              <i /> {selected.name}
+              {selMark?.b != null && (
+                <span className="meta">
+                  {riffTime(selMark.a)}–{riffTime(selMark.b)}
+                </span>
+              )}
+            </span>
+            <RiffStatusSelect r={selected} />
+            {looping && (
+              <span className="riff-reps" aria-label={`${reps} loops`}>
+                ×{reps}
+              </span>
+            )}
           </div>
+          {looping && selMark && (
+            <>
+              {/* Zoomed in on the loop: where the playhead is inside the riff. */}
+              <span className="riff-progress" aria-hidden>
+                <i style={{ width: `${Math.min(100, Math.max(0, ((clock.t - selMark.a) / Math.max(0.1, selMark.b! - selMark.a)) * 100))}%` }} />
+              </span>
+              <div className="riff-adjust-row">
+                <span className="meta">Start</span>
+                <button className="chip" aria-label="Start earlier" onClick={() => setRiffMark(selected.id, resource.id, "a", selMark.a - NUDGE)}>
+                  −
+                </button>
+                <button className="chip" aria-label="Start later" onClick={() => setRiffMark(selected.id, resource.id, "a", selMark.a + NUDGE)}>
+                  +
+                </button>
+                <span className="meta">End</span>
+                <button className="chip" aria-label="End earlier" onClick={() => setRiffMark(selected.id, resource.id, "b", selMark.b! - NUDGE)}>
+                  −
+                </button>
+                <button className="chip" aria-label="End later" onClick={() => setRiffMark(selected.id, resource.id, "b", selMark.b! + NUDGE)}>
+                  +
+                </button>
+                <button
+                  className="chip"
+                  onClick={() => {
+                    setRiffId(null);
+                    setArmed(selected.id);
+                  }}
+                >
+                  <RotateCcw /> Re-mark
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
