@@ -3903,3 +3903,131 @@ button.fact:hover {
   width: 72px;
   border-radius: 8px;
 }
+
+/* Riff ends: handles on the timeline and on the zoomed ruler */
+.rt-handle,
+.rz-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 26px;
+  margin-left: -13px;
+  touch-action: none;
+  cursor: ew-resize;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+}
+.rt-handle::before,
+.rz-handle::before {
+  content: "";
+  width: 6px;
+  height: 70%;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 0 0 2px var(--background-primary);
+}
+.riff-zoom {
+  position: relative;
+  height: 46px;
+  margin: 10px 0 18px;
+  border-radius: 8px;
+  background: var(--background-tertiary);
+  cursor: pointer;
+  touch-action: none;
+}
+.rz-range {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  border-radius: 6px;
+  background: var(--rc);
+  opacity: 0.75;
+}
+.rz-handle b {
+  position: absolute;
+  top: calc(100% + 2px);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.riff-adjust-name .riff-rename {
+  width: 13px;
+  height: 13px;
+  color: var(--text-tertiary);
+}
+.riff-names {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.riff-names-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Right-click menu (desktop) */
+.ctx-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 210px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--background-elevated);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), inset 0 0 0 1px #333;
+  display: flex;
+  flex-direction: column;
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px 0 8px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  text-align: left;
+  white-space: nowrap;
+}
+.ctx-item:hover:not(:disabled),
+.ctx-item.open {
+  background: #333;
+}
+.ctx-item:disabled {
+  color: var(--text-disabled);
+}
+.ctx-item.danger {
+  color: #ff6b6b;
+}
+.ctx-icon {
+  width: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.ctx-icon svg {
+  width: 15px;
+  height: 15px;
+}
+.ctx-icon i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.ctx-label {
+  flex: 1;
+}
+.ctx-more {
+  width: 14px;
+  height: 14px;
+  color: var(--text-tertiary);
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: #333;
+}

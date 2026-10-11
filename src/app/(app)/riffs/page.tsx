@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Kanban, type DragBits } from "@/components/Kanban";
 import { LoadingList } from "@/components/Loading";
+import { contextMenu } from "@/components/ContextMenu";
+import { riffMenu } from "@/components/RiffMenu";
 import { riffTime } from "@/components/Riffs";
 import { Thumb } from "@/components/Thumb";
 import { TopBar } from "@/components/TopBar";
@@ -44,6 +46,7 @@ function RiffCard({ item, drag, wasDragging }: { item: Item; drag: DragBits | nu
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && open()}
+      onContextMenu={contextMenu(() => riffMenu(riff.id, { go: router.push }))}
       {...drag?.dragProps}
     >
       <div className="bcard-thumb">

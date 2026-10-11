@@ -201,11 +201,30 @@ export interface Riff {
   updatedAt: string;
 }
 
-/** Riff colors, picked in order so riffs of one song never share one. */
-export const RIFF_COLORS = ["#3DB8FF", "#F5C542", "#4CC38A", "#E062D6", "#FF8A3D", "#7C6CFF", "#FF2D2D"];
+/** Common song parts, each with a fixed color everywhere: a solo is always red, an intro green. */
+export const RIFF_PARTS: { name: string; color: string; aliases: string[] }[] = [
+  { name: "Intro", color: "#4CC38A", aliases: ["introdução", "introducao"] },
+  { name: "Main riff", color: "#3DB8FF", aliases: ["riff", "riff principal"] },
+  { name: "Verse", color: "#7C6CFF", aliases: ["verso", "estrofe"] },
+  { name: "Pre-chorus", color: "#E062D6", aliases: ["pre chorus", "prechorus", "pré-refrão", "pre-refrão", "pré refrão"] },
+  { name: "Chorus", color: "#F5C542", aliases: ["refrão", "refrao"] },
+  { name: "Bridge", color: "#FF8A3D", aliases: ["ponte"] },
+  { name: "Solo", color: "#FF2D2D", aliases: [] },
+  { name: "Outro", color: "#2DD4BF", aliases: ["final", "fim"] },
+];
 
-export function riffColor(r: Pick<Riff, "color">) {
-  return r.color ?? RIFF_COLORS[0];
+/** Colors for riffs with their own names, picked in order so riffs of one song rarely share one. */
+export const RIFF_COLORS = ["#A3E635", "#F472B6", "#38BDF8", "#FBBF24", "#C084FC", "#94A3B8"];
+
+/** The part a riff name stands for ("Solo 2", "solo", "Refrão" → Solo, Chorus), if any. */
+export function riffPart(name: string) {
+  const base = name.trim().toLowerCase().replace(/\s*\d+$/, "");
+  return RIFF_PARTS.find((p) => p.name.toLowerCase() === base || p.aliases.includes(base));
+}
+
+/** A part's fixed color wins; otherwise the color the riff was given. */
+export function riffColor(r: Pick<Riff, "color" | "name">) {
+  return riffPart(r.name)?.color ?? r.color ?? RIFF_COLORS[0];
 }
 
 export interface JamPlay {

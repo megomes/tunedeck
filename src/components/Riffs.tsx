@@ -2,10 +2,12 @@
 
 import { Play, Plus, Repeat, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { createRiff, deleteRiff, openResource, playRiff, setRiffStatus, updateRiff } from "@/lib/client/actions";
+import { createRiff, deleteRiff, openResource, playRiff, renameRiff, setRiffStatus } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import type { SongView } from "@/lib/client/views";
-import { RESOURCE_SHORT, STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
+import { contextMenu } from "./ContextMenu";
+import { riffMenu } from "./RiffMenu";
+import { RESOURCE_SHORT, RIFF_PARTS, STATUSES, STATUS_LABEL, riffColor, type Riff, type Status } from "@/lib/shared/types";
 
 export function riffTime(sec: number) {
   const m = Math.floor(sec / 60);
@@ -53,41 +55,66 @@ export function RiffStatusSelect({ r }: { r: Riff }) {
   );
 }
 
+
+/** Rename a riff: tap a common part name (it brings its color) or type one. Repeats get a number (Solo 2). */
+export function RiffNamePicker({ r, onDone }: { r: Riff; onDone: () => void }) {
+  const [custom, setCustom] = useState("");
+  const pick = (name: string) => {
+    renameRiff(r.id, name);
+    onDone();
+  };
+  return (
+    <div className="riff-names">
+      <div className="riff-names-chips">
+        {RIFF_PARTS.map((p) => (
+          <button key={p.name} type="button" className={`chip ${r.name === p.name ? "active" : ""}`} onClick={() => pick(p.name)}>
+            <span className="tag-dot" style={{ background: p.color }} />
+            {p.name}
+          </button>
+        ))}
+      </div>
+      <form
+        className="row-gap"
+        onSubmit={(e) => {
+          e.preventDefault();
+          pick(custom);
+        }}
+      >
+        <input
+          className="input"
+          style={{ height: 38, borderRadius: 999 }}
+          placeholder={`Or type a name (now: ${r.name})`}
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+        />
+        <button className="btn btn-surface btn-sm" type="submit" disabled={!custom.trim()}>
+          Save
+        </button>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={onDone}>
+          Cancel
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function RiffItem({ r, view }: { r: Riff; view: SongView }) {
-  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
   const videos = view.resources.filter((x) => x.provider === "youtube" && x.externalId);
   return (
-    <div className="riff-card" style={{ ["--rc" as string]: riffColor(r) }}>
+    <div className="riff-card" style={{ ["--rc" as string]: riffColor(r) }} onContextMenu={contextMenu(() => riffMenu(r.id))}>
       <div className="riff-row-head">
         <i className="riff-dot" />
-        {renaming == null ? (
-          <button className="riff-name truncate" title="Rename" onClick={() => setRenaming(r.name)}>
-            {r.name}
-          </button>
-        ) : (
-          <form
-            className="grow"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (renaming.trim()) updateRiff(r.id, { name: renaming.trim() });
-              setRenaming(null);
-            }}
-          >
-            <input
-              className="input"
-              style={{ height: 34 }}
-              autoFocus
-              value={renaming}
-              onChange={(e) => setRenaming(e.target.value)}
-              onBlur={(e) => e.currentTarget.form?.requestSubmit()}
-            />
-          </form>
-        )}
+        <button className="riff-name truncate" title="Rename" onClick={() => setRenaming((x) => !x)}>
+          {r.name}
+        </button>
         <RiffStatusSelect r={r} />
         <button className="icon-btn sm muted" aria-label="Remove riff" onClick={() => deleteRiff(r.id)}>
           <Trash2 />
         </button>
       </div>
+
+      {renaming && <RiffNamePicker r={r} onDone={() => setRenaming(false)} />}
 
       {videos.length === 0 ? (
         <p className="meta" style={{ margin: 0 }}>Add a YouTube video to mark where this riff is.</p>

@@ -8,6 +8,7 @@ import { initOffline } from "@/lib/client/offline";
 import { initStore, useStore } from "@/lib/client/store";
 import { dismissToast, setActiveSong, useActiveSong, usePlayer, useToasts } from "@/lib/client/ui";
 import { useView } from "@/lib/client/views";
+import { ContextMenuHost } from "./ContextMenu";
 import { OfflineBanner } from "./OfflineVideos";
 import { Player } from "./Player";
 import { PlusOne } from "./PlusOne";
@@ -137,6 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Suspense>
       )}
       <Toaster raised={hasDock} />
+      <ContextMenuHost />
 
       <nav className="bottom-nav" aria-label="Main">
         {PHONE_NAV.slice(0, 2).map(({ href, label, icon: Icon }) => (
