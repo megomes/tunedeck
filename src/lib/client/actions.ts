@@ -13,7 +13,7 @@ import type {
   Status,
   Tag,
 } from "@/lib/shared/types";
-import { RIFF_COLORS, STATUS_LABEL } from "@/lib/shared/types";
+import { RESOURCE_SHORT, RIFF_COLORS, STATUS_LABEL } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 import { hasLocalVideo } from "./offline";
 import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
@@ -465,6 +465,36 @@ export function putRiffMark(id: string, resourceId: string, mark: RiffMark) {
   dispatch({ t: "riff.upsert", riff: { ...r, marks: { ...r.marks, [resourceId]: next }, updatedAt: now() } });
 }
 
+/** Two videos this close in length are taken as the same recording (e.g. original vs. standard tuning). */
+const SAME_RECORDING = 1.5;
+
+/**
+ * Places a riff in a video of the same length as one where it is marked (same recording, e.g. the
+ * standard-tuning version) by copying the timing. Returns the mark, or null when nothing fits.
+ */
+export function placeSameRecording(id: string, resourceId: string): RiffMark | null {
+  const r = riff(id);
+  const { resources } = getState().data;
+  const target = resources.find((x) => x.id === resourceId);
+  if (!r || !target?.durationSeconds || r.marks[resourceId]) return null;
+  const source = resources.find(
+    (x) =>
+      x.id !== resourceId &&
+      x.repertoireEntryId === r.repertoireEntryId &&
+      r.marks[x.id]?.b != null &&
+      x.durationSeconds != null &&
+      Math.abs(x.durationSeconds - target.durationSeconds!) <= SAME_RECORDING,
+  );
+  if (!source) return null;
+  const mark = r.marks[source.id];
+  putRiffMark(id, resourceId, mark);
+  toast(`Same length as ${source.customLabel || RESOURCE_SHORT[source.type]}: copied its timing`, {
+    label: "Mark by hand",
+    run: () => clearRiffMark(id, resourceId),
+  });
+  return mark;
+}
+
 export function clearRiffMark(id: string, resourceId: string) {
   const r = riff(id);
   if (!r) return;
@@ -490,6 +520,7 @@ export function playRiff(id: string, resourceId?: string) {
   const target =
     resources.find((x) => x.id === resourceId) ?? resources.find((x) => r.marks[x.id]?.b != null) ?? resources.find((x) => r.marks[x.id]);
   if (!target) return false;
+  placeSameRecording(r.id, target.id);
   const online = typeof navigator === "undefined" || navigator.onLine;
   if (!online && !hasLocalVideo(target.externalId!)) {
     toast("This video isn't saved on this device");

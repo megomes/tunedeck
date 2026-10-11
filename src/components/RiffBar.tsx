@@ -1,8 +1,8 @@
 "use client";
 
-import { Circle, LogOut, Plus, Repeat, RotateCcw, Square } from "lucide-react";
+import { Circle, LogOut, Pause, Play, Plus, Repeat, RotateCcw, Square } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { clearRiffMark, createRiff, putRiffMark, setRiffMark } from "@/lib/client/actions";
+import { createRiff, placeSameRecording, putRiffMark, setRiffMark } from "@/lib/client/actions";
 import { useData } from "@/lib/client/store";
 import { toast } from "@/lib/client/ui";
 import { RESOURCE_SHORT, riffColor, type Resource, type Riff, type RiffMark } from "@/lib/shared/types";
@@ -12,8 +12,6 @@ import { riffTime } from "./Riffs";
 /** Taps land a bit late: shift marks back by a typical reaction time. */
 const REACTION = 0.25;
 const NUDGE = 0.5;
-/** Two videos this close in length are taken as the same recording (e.g. original vs. standard tuning). */
-const SAME_RECORDING = 1.5;
 
 const label = (r: Resource) => r.customLabel || RESOURCE_SHORT[r.type];
 
@@ -28,6 +26,7 @@ export function RiffBar({
   riffId,
   setRiffId,
   engine,
+  seek,
   reps,
 }: {
   entryId: string;
@@ -35,14 +34,17 @@ export function RiffBar({
   riffId: string | null;
   setRiffId: (id: string | null) => void;
   engine: RefObject<Engine | null>;
+  /** Seek that the loop does not mistake for the user leaving the riff. */
+  seek: (t: number) => void;
   reps: number;
 }) {
   const data = useData();
   const riffs = data.riffs.filter((r) => r.repertoireEntryId === entryId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const videos = data.resources.filter((r) => r.repertoireEntryId === entryId && r.provider === "youtube" && r.externalId);
-  const [clock, setClock] = useState({ t: 0, d: 0 });
+  const [clock, setClock] = useState({ t: 0, d: 0, playing: false });
   /** Marking in progress: start is set, waiting for the end. riffId null = a new riff. */
   const [marking, setMarking] = useState<{ riffId: string | null; a: number } | null>(null);
+  const drag = useRef<{ x: number; moved: boolean; at: number } | null>(null);
   /** "Re-mark": the next tap starts marking this riff by hand. */
   const [armed, setArmed] = useState<string | null>(null);
 
@@ -53,7 +55,7 @@ export function RiffBar({
   useEffect(() => {
     const id = setInterval(() => {
       const e = engine.current;
-      if (e) setClock({ t: e.time(), d: e.duration() || resource.durationSeconds || 0 });
+      if (e) setClock({ t: e.time(), d: e.duration() || resource.durationSeconds || 0, playing: e.playing() });
     }, 200);
     return () => clearInterval(id);
   }, [engine, resource.durationSeconds]);
@@ -65,38 +67,25 @@ export function RiffBar({
   }, [resource.id]);
 
   const now = () => engine.current?.time() ?? 0;
-  const seek = (t: number) => engine.current?.seek(t);
-
-  /** Another video of the song where this riff is fully marked, preferring one of the same length. */
-  const sourceFor = (r: Riff) => {
-    const marked = videos.filter((v) => v.id !== resource.id && r.marks[v.id]?.b != null);
-    const same = marked.find(
-      (v) => v.durationSeconds && resource.durationSeconds && Math.abs(v.durationSeconds - resource.durationSeconds) <= SAME_RECORDING,
-    );
-    return { same, any: marked[0] };
+  const togglePlay = () => {
+    const e = engine.current;
+    if (!e) return;
+    if (e.playing()) e.pause();
+    else e.play();
+    setClock((c) => ({ ...c, playing: !c.playing }));
   };
 
-  // Switching to the same recording (e.g. the standard-tuning version): the riff is placed right away.
-  const autoCopied = useRef<string | null>(null);
+  /** Another video of the song where this riff is fully marked. */
+  const sourceFor = (r: Riff) => videos.find((v) => v.id !== resource.id && r.marks[v.id]?.b != null);
+
+  // Picking a riff that is not marked in this video but is in one of the same length: copy it.
+  // (Switching videos does this before loading, so the new video opens on the riff.)
   useEffect(() => {
     if (!selected || selMark) return;
-    const key = `${selected.id}:${resource.id}`;
-    if (autoCopied.current === key) return;
-    const { same } = sourceFor(selected);
-    if (!same) return;
-    autoCopied.current = key;
-    const m = selected.marks[same.id];
-    putRiffMark(selected.id, resource.id, m);
-    seek(m.a);
-    toast(`Same length as ${label(same)}: copied its timing`, {
-      label: "Mark by hand",
-      run: () => {
-        clearRiffMark(selected.id, resource.id);
-        setArmed(selected.id);
-      },
-    });
+    const m = placeSameRecording(selected.id, resource.id);
+    if (m) seek(m.a);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.id, resource.id, !!selMark]);
+  }, [selected?.id]);
 
   const startLoop = (id: string, m: RiffMark) => {
     setRiffId(id);
@@ -126,7 +115,7 @@ export function RiffBar({
       return;
     }
     if (selected && !selMark) {
-      const { any } = sourceFor(selected);
+      const any = sourceFor(selected);
       if (any) {
         // One tap: the end comes from how long the riff is in the other video.
         const m = selected.marks[any.id];
@@ -173,7 +162,7 @@ export function RiffBar({
 
   const markingRiff = marking?.riffId ? riffs.find((r) => r.id === marking.riffId) : null;
   const armedRiff = armed ? riffs.find((r) => r.id === armed) : null;
-  const pendingSource = selected && !selMark ? sourceFor(selected).any : undefined;
+  const pendingSource = selected && !selMark ? sourceFor(selected) : undefined;
 
   let mainLabel: string;
   let mainHint: string | null = null;
@@ -207,11 +196,35 @@ export function RiffBar({
         aria-valuemax={Math.round(d)}
         aria-valuenow={Math.round(clock.t)}
         onClick={(e) => {
+          if (drag.current?.moved) return;
           const rect = e.currentTarget.getBoundingClientRect();
           // Jumping elsewhere means leaving the loop.
           setRiffId(null);
-          seek(((e.clientX - rect.left) / rect.width) * d);
+          engine.current?.seek(((e.clientX - rect.left) / rect.width) * d);
         }}
+        // Drag to scrub. Pointer capture starts only once it is a drag, so taps still reach the riff segments.
+        onPointerDown={(e) => {
+          drag.current = { x: e.clientX, moved: false, at: 0 };
+        }}
+        onPointerMove={(e) => {
+          const g = drag.current;
+          if (!g) return;
+          if (!g.moved) {
+            if (Math.abs(e.clientX - g.x) < 6) return;
+            g.moved = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }
+          const now = performance.now();
+          if (now - g.at < 80) return;
+          g.at = now;
+          const rect = e.currentTarget.getBoundingClientRect();
+          engine.current?.seek(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * d);
+        }}
+        onPointerUp={() => {
+          // Let the click that follows a drag see it, then forget it.
+          setTimeout(() => (drag.current = null), 0);
+        }}
+        onPointerCancel={() => (drag.current = null)}
       >
         {riffs.map((r) => {
           const m = r.marks[resource.id];
@@ -268,6 +281,9 @@ export function RiffBar({
       )}
 
       <div className="riff-main-row">
+        <button className="riff-play" aria-label={clock.playing ? "Pause" : "Play"} onClick={togglePlay}>
+          {clock.playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
+        </button>
         <button className={`riff-main ${marking ? "recording" : ""}`} onClick={main}>
           {marking ? <Square fill="currentColor" /> : looping ? <LogOut /> : <Circle fill="currentColor" />}
           <span className="truncate">{mainLabel}</span>

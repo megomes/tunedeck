@@ -3,11 +3,11 @@
 import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { jamPlayed, openLink, openResource, openSongsterr, playedOnce } from "@/lib/client/actions";
+import { jamPlayed, openLink, openResource, openSongsterr, placeSameRecording, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
 import { useData } from "@/lib/client/store";
-import { closePlayer, playVideo, readPref, setPlayerExpanded, usePlayer, writePref } from "@/lib/client/ui";
+import { closePlayer, playVideo, readPref, setPlayerExpanded, toast, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
 import { RESOURCE_LABEL, riffColor } from "@/lib/shared/types";
@@ -25,6 +25,8 @@ interface YTPlayer {
   setPlaybackRate(rate: number): void;
   getCurrentTime(): number;
   seekTo(seconds: number, allowSeekAhead: boolean): void;
+  playVideo(): void;
+  pauseVideo(): void;
   getDuration(): number;
   getPlayerState(): number;
   destroy(): void;
@@ -205,15 +207,24 @@ export function Player() {
     return r && resource ? r.marks[resource.id]?.a : undefined;
   })();
 
+  /** Seeks made by the loop itself; jumps right after one are not the user's. */
+  const ownSeekAt = useRef(0);
+  const seekOwn = useCallback((t: number) => {
+    ownSeekAt.current = performance.now();
+    engine.current?.seek(t);
+  }, []);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRiffId(requestedRiff);
     // Same video already playing: jump straight to the riff.
-    if (requestedStart != null) engine.current?.seek(requestedStart);
+    if (requestedStart != null) seekOwn(requestedStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedRiff, resource?.id]);
 
-  // Jump back to the start whenever playback reaches the end of the riff, counting each pass.
+  // Reaching the end of the riff goes back to its start, counting each pass. Jumping outside the
+  // riff yourself (dragging the video, a seek bar or the timeline) turns the loop off instead of
+  // pulling you back; jumps inside it keep looping.
   const [reps, setReps] = useState(0);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -221,11 +232,49 @@ export function Player() {
   }, [riffId, resource?.id]);
   useEffect(() => {
     if (!loop) return;
+    // Playback at speed <= 1 never moves the playhead faster than the wall clock, so any bigger
+    // move is a jump: a drag, a seek bar or the timeline, while playing or while paused.
+    let last: number | null = null;
+    let lastAt = 0;
     const id = setInterval(() => {
       const p = engine.current;
       const l = loopRef.current;
-      if (p && l && p.playing() && p.time() >= l.b) {
-        p.seek(l.a);
+      if (!p || !l) return;
+      const now = performance.now();
+      // Right after the loop's own seek the reported time can lag: start over from the new spot.
+      if (now - ownSeekAt.current < 700) {
+        last = null;
+        return;
+      }
+      const t = p.time();
+      if (!p.playing()) {
+        // Paused: time stands still, so keep the clock in step but not the position (a drag while
+        // paused shows up as a jump on play).
+        if (last == null) last = t;
+        lastAt = now;
+        return;
+      }
+      if (last == null && (t < l.a - 0.1 || t > l.b + 0.8)) {
+        // Not where the loop's own seek put it (plus at most the settle time of playback):
+        // the user moved it, e.g. kept dragging across the riff's end.
+        setRiffId(null);
+        toast("Loop off: you left the riff");
+        return;
+      }
+      const moved = last == null ? 0 : t - last;
+      const elapsed = (now - lastAt) / 1000;
+      const jumped = last != null && (moved < -0.15 || moved > elapsed + 0.15);
+      last = t;
+      lastAt = now;
+      if (jumped) {
+        if (t < l.a - 0.1 || t > l.b + 0.1) {
+          setRiffId(null);
+          toast("Loop off: you left the riff");
+        }
+        return;
+      }
+      if (t >= l.b) {
+        seekOwn(l.a);
         setReps((n) => n + 1);
       }
     }, 40);
@@ -325,6 +374,8 @@ export function Player() {
           duration: () => (ready() ? player.getDuration() : 0),
           playing: () => ready() && player.getPlayerState() === PLAYING,
           seek: (t) => ready() && player.seekTo(t, true),
+          play: () => ready() && player.playVideo(),
+          pause: () => ready() && player.pauseVideo(),
         };
       })
       .catch(() => setError("Couldn't load the YouTube player. Check your connection."));
@@ -420,7 +471,7 @@ export function Player() {
 
           {/* Riffs right under the video: the part used with the guitar in hand. */}
           {view && resource && (
-            <RiffBar entryId={view.id} resource={resource} riffId={riffId} setRiffId={setRiffId} engine={engine} reps={reps} />
+            <RiffBar entryId={view.id} resource={resource} riffId={riffId} setRiffId={setRiffId} engine={engine} seek={seekOwn} reps={reps} />
           )}
 
           <div className="player-info">
@@ -508,7 +559,12 @@ export function Player() {
                         key={r.id}
                         className={`pick ${r.id === resource.id ? "active" : ""}`}
                         // Keep the selected riff: it loops in the other video too, or gets marked there.
-                        onClick={() => (riffId && r.provider === "youtube" && r.externalId ? playVideo(r.id, view.id, riffId) : openResource(r))}
+                        onClick={() => {
+                          if (!riffId || r.provider !== "youtube" || !r.externalId) return openResource(r);
+                          // Copy the timing first when it is the same recording, so the video opens on the riff.
+                          placeSameRecording(riffId, r.id);
+                          playVideo(r.id, view.id, riffId);
+                        }}
                       >
                         <Thumb src={r.thumbnailUrl} title={r.title ?? view.song.title}>
                           {r.provider === "youtube" && <SourceBadge videoId={r.externalId} />}
