@@ -3639,12 +3639,12 @@ button.fact:hover {
 }
 .riff-timeline {
   position: relative;
-  height: 30px;
+  height: 34px;
+  touch-action: none;
   border-radius: 8px;
   background: var(--background-tertiary);
   cursor: pointer;
   overflow: hidden;
-  touch-action: manipulation;
 }
 .rt-seg {
   position: absolute;
@@ -3853,4 +3853,22 @@ button.fact:hover {
   height: 100%;
   background: var(--rc);
   transition: width 0.2s linear;
+}
+.riff-play {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--text-primary);
+  color: var(--background-primary);
+  transition: transform var(--duration-fast) var(--ease);
+}
+.riff-play:active {
+  transform: scale(0.95);
+}
+.riff-play svg {
+  width: 22px;
+  height: 22px;
 }
