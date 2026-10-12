@@ -14,6 +14,7 @@ import { Player } from "./Player";
 import { PlusOne } from "./PlusOne";
 import { SyncBadge } from "./SyncBadge";
 import { Thumb } from "./Thumb";
+import { UpNextSwap } from "./UpNextSwap";
 
 const NAV = [
   { href: "/backlog", label: "Backlog", icon: Inbox },
@@ -141,6 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       <Toaster raised={hasDock} />
       <ContextMenuHost />
+      <UpNextSwap />
 
       <nav className="bottom-nav" aria-label="Main">
         {PHONE_NAV.slice(0, 3).map(({ href, label, icon: Icon }) => (

@@ -4299,6 +4299,13 @@ a.playnow:hover {
   color: #f5c542;
   gap: 3px;
 }
+/* Hold-to-remove stars: no text selection or iOS callout while holding. */
+.star-hold {
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
 .blcard .thumb-overlay .badge {
   white-space: nowrap;
 }
@@ -4939,4 +4946,98 @@ a.playnow:hover {
   width: 20px;
   height: 20px;
   accent-color: var(--accent);
+}
+
+/* ⭐ favorite moment in the player (videos saved on the device) */
+.player-star {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.player-star .chip.starred svg:first-child {
+  color: #f5c542;
+}
+
+/* "Up Next is full": pick the one to swap out */
+.swap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.swap-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.swap-row.incoming {
+  padding: 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-md);
+  background: var(--background-tertiary);
+}
+.swap-media {
+  position: relative;
+  flex: 0 0 auto;
+  width: 132px;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  transition: width var(--duration-normal) var(--ease);
+}
+.swap-media:has(.clip) {
+  width: 196px;
+}
+.swap-media .thumb {
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+.swap-play {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(10, 10, 10, 0.7);
+  z-index: 4;
+}
+.swap-play svg {
+  width: 11px;
+  height: 11px;
+}
+.swap-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.swap-title {
+  font-weight: 500;
+}
+.swap-n {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--background-elevated);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+@media (max-width: 480px) {
+  .swap-media {
+    width: 104px;
+  }
+  .swap-media:has(.clip) {
+    width: 150px;
+  }
 }

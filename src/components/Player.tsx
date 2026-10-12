@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, Star, X } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { jamPlayed, openLink, openResource, openSongsterr, placeSameRecording, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
@@ -10,10 +10,11 @@ import { useData } from "@/lib/client/store";
 import { closePlayer, playVideo, readPref, setPlayerExpanded, toast, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
 import { useView } from "@/lib/client/views";
-import { RESOURCE_LABEL, riffColor } from "@/lib/shared/types";
+import { RESOURCE_LABEL, riffColor, type Resource } from "@/lib/shared/types";
 import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
+import { clearStar, holdFor, starHere } from "./BacklogCard";
 import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
 import { RiffBar } from "./RiffBar";
 import { SourceBadge } from "./SourceBadge";
@@ -136,6 +137,38 @@ function JamInfo({ trackId }: { trackId: string }) {
       <p className="meta" style={{ margin: 0 }}>
         Jammed {t.playCount}×{t.playCount ? ` · last ${new Date(t.lastPlayedAt!).toLocaleDateString()}` : ""}
       </p>
+    </div>
+  );
+}
+
+function StarRow({
+  entryId,
+  resource,
+  star,
+  engine,
+  seek,
+}: {
+  entryId: string;
+  resource: Resource;
+  star: number | null;
+  engine: RefObject<Engine | null>;
+  seek: (t: number) => void;
+}) {
+  return (
+    <div className="player-star">
+      <button
+        {...holdFor(star != null ? () => clearStar(entryId, resource, star) : null)}
+        className={`chip sm star-hold ${star != null ? "starred" : ""}`}
+        onClick={() => starHere(entryId, resource, engine.current?.time() ?? 0, star)}
+      >
+        <Star fill={star != null ? "currentColor" : "none"} /> {star != null ? "Move ⭐ here" : "Favorite moment"}
+      </button>
+      {star != null && (
+        <button className="chip sm" onClick={() => seek(star)} aria-label="Jump to the star">
+          <Play /> {duration(star)}
+        </button>
+      )}
+      <span className="hint">{star != null ? "Hold the star to remove it" : "Tap where your favorite part starts"}</span>
     </div>
   );
 }
@@ -473,6 +506,9 @@ export function Player() {
           {view && resource && (
             <RiffBar entryId={view.id} resource={resource} riffId={riffId} setRiffId={setRiffId} engine={engine} seek={seekOwn} reps={reps} />
           )}
+
+          {/* ⭐ where the favorite passage starts: Backlog previews and "What do I play now?" start there. */}
+          {native && view && resource && <StarRow entryId={view.id} resource={resource} star={view.entry.stars?.[resource.id] ?? null} engine={engine} seek={seekOwn} />}
 
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>

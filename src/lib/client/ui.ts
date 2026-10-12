@@ -156,3 +156,25 @@ export function usePlayer() {
     () => null,
   );
 }
+
+// ---------- "Up Next is full": which one makes room? ----------
+
+let swapFor: string | null = null;
+const swapListeners = new Set<() => void>();
+
+/** Opens the sheet that asks which Up Next song to swap out for this one. */
+export function askUpNextSwap(entryId: string | null) {
+  swapFor = entryId;
+  swapListeners.forEach((l) => l());
+}
+
+export function useUpNextSwap() {
+  return useSyncExternalStore(
+    (l) => {
+      swapListeners.add(l);
+      return () => swapListeners.delete(l);
+    },
+    () => swapFor,
+    () => null,
+  );
+}

@@ -17,7 +17,7 @@ import { RESOURCE_SHORT, RIFF_COLORS, STATUS_LABEL, UP_NEXT_MAX } from "@/lib/sh
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 import { hasLocalVideo } from "./offline";
 import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
-import { playJam, playVideo, setActiveSong, toast } from "./ui";
+import { askUpNextSwap, playJam, playVideo, setActiveSong, toast } from "./ui";
 
 const now = () => new Date().toISOString();
 const uuid = () => crypto.randomUUID();
@@ -110,15 +110,27 @@ export function upNext() {
 export const upNextFree = () => Math.max(0, UP_NEXT_MAX - upNext().length);
 
 function upNextFull(entryId: string) {
-  const queue = upNext();
-  const last = queue[queue.length - 1];
-  toast(`Up Next is full (${UP_NEXT_MAX})`, last && {
-    label: "Swap last",
-    run: () => {
-      // The last one goes back to the Backlog to make room.
-      updateEntry(last.id, { status: "BACKLOG", position: topPosition("BACKLOG", last.id) });
-      updateEntry(entryId, { status: "WANT_TO_PLAY", position: (last.position ?? 0) + 1 });
-    },
+  askUpNextSwap(entryId);
+}
+
+/** Puts a song in Up Next in place of another, which goes back to the top of the Backlog. */
+export function swapIntoUpNext(entryId: string, outId: string) {
+  const e = entry(entryId);
+  const out = entry(outId);
+  if (!e || !out) return;
+  const before = [
+    { id: entryId, status: e.status, position: e.position },
+    { id: outId, status: out.status, position: out.position },
+  ];
+  updateEntry(outId, { status: "BACKLOG", position: topPosition("BACKLOG", outId) });
+  updateEntry(entryId, { status: "WANT_TO_PLAY", position: out.position });
+  const song = (id: string) => {
+    const x = entry(id);
+    return getState().data.songs.find((s) => s.id === x?.songId)?.title ?? "song";
+  };
+  toast(`${song(entryId)} in, ${song(outId)} back to the Backlog`, {
+    label: "Undo",
+    run: () => before.forEach((b) => updateEntry(b.id, { status: b.status, position: b.position })),
   });
 }
 

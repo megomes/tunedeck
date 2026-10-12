@@ -2,7 +2,7 @@
 
 import { Check, Guitar, ListPlus, ListVideo, SkipForward, Star, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, type MouseEvent } from "react";
 import { addToUpNext, openResource, openSongsterr, setStar } from "@/lib/client/actions";
 import type { BacklogItem } from "@/lib/client/backlog";
 import { duration as clock } from "@/lib/client/format";
@@ -19,6 +19,69 @@ export function starHere(entryId: string, resource: Resource, time: number, prev
   const at = Math.max(0, time - 2);
   setStar(entryId, resource.id, at);
   toast(`⭐ at ${clock(at)}: previews start here`, { label: "Undo", run: () => setStar(entryId, resource.id, prev) });
+}
+
+/** Removes the ⭐ (undoable). */
+export function clearStar(entryId: string, resource: Resource, prev: number) {
+  setStar(entryId, resource.id, null);
+  toast("⭐ removed", { label: "Undo", run: () => setStar(entryId, resource.id, prev) });
+}
+
+const HOLD_MS = 550;
+let holdTimer: ReturnType<typeof setTimeout> | undefined;
+let swallowing = false;
+
+/**
+ * After a hold, the click that comes with lifting the finger must do nothing, even though the
+ * button under it has already re-rendered (the ⭐ is gone). Disarmed by the next press.
+ */
+function swallowNextClick() {
+  if (swallowing) return;
+  swallowing = true;
+  const onClick = (e: Event) => {
+    e.stopPropagation();
+    e.preventDefault();
+    done();
+  };
+  const done = () => {
+    swallowing = false;
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("pointerdown", done, true);
+  };
+  document.addEventListener("click", onClick, true);
+  // A new press starts a new interaction: let its click through.
+  setTimeout(() => document.addEventListener("pointerdown", done, true), 0);
+}
+
+/**
+ * Press and hold (or right-click) to run `onHold`, used to remove a ⭐ from any star button or badge.
+ * The tap that ends a hold does nothing else. Empty when there's nothing to hold for.
+ */
+export function holdFor(onHold: (() => void) | null) {
+  if (!onHold) return {};
+  const fire = () => {
+    clearTimeout(holdTimer);
+    swallowNextClick();
+    navigator.vibrate?.(15);
+    onHold();
+  };
+  const cancel = () => clearTimeout(holdTimer);
+  return {
+    title: "Hold to remove the ⭐",
+    onPointerDown: () => {
+      cancel();
+      holdTimer = setTimeout(fire, HOLD_MS);
+    },
+    onPointerUp: cancel,
+    onPointerLeave: cancel,
+    onPointerCancel: cancel,
+    // Long-press on touch screens and right-click with a mouse both land here.
+    onContextMenu: (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!swallowing) fire();
+    },
+  };
 }
 
 /** Thin bars on top of a preview, one per clip, like stories. */
@@ -95,8 +158,9 @@ export function BacklogCard({
             <ClipBars state={clip} star={star != null} />
             <div className="blcard-clip-tools" onClick={(e) => e.stopPropagation()}>
               <button
-                className={`clip-tool ${star != null ? "on" : ""}`}
-                aria-label="Star this moment"
+                {...holdFor(star != null ? () => clearStar(view.id, preview, star) : null)}
+                className={`clip-tool star-hold ${star != null ? "on" : ""}`}
+                aria-label={star != null ? "Move the star here (hold to remove)" : "Star this moment"}
                 onClick={() => starHere(view.id, preview, ctl.current?.time() ?? 0, star)}
               >
                 <Star fill={star != null ? "currentColor" : "none"} />
@@ -114,7 +178,7 @@ export function BacklogCard({
           <button className="blcard-thumb" onClick={tapPicture} aria-label={preview ? `Preview ${song.title}` : `Play ${song.title}`}>
             <Thumb src={shown?.thumbnailUrl ?? view.thumb} title={song.title}>
               {star != null && (
-                <span className="badge badge-tl blcard-star" title={`⭐ at ${clock(star)}`}>
+                <span {...holdFor(shown ? () => clearStar(view.id, shown, star) : null)} className="badge badge-tl blcard-star star-hold">
                   <Star fill="currentColor" /> {clock(star)}
                 </span>
               )}

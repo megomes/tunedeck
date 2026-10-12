@@ -3,7 +3,7 @@
 import { ArrowLeft, Check, ChevronUp, Info, Play, Plus, RotateCcw, Sparkles, Star, Volume2, VolumeX, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipBars, starHere } from "@/components/BacklogCard";
+import { ClipBars, clearStar, holdFor, starHere } from "@/components/BacklogCard";
 import { Clip, prefetchClip, toggleClipsMuted, useClipMuted, type ClipCtl, type ClipState } from "@/components/Clip";
 import { DifficultyMeter } from "@/components/Difficulty";
 import { Thumb } from "@/components/Thumb";
@@ -145,6 +145,7 @@ export default function PlayNowPage() {
   };
 
   const star = (x: BacklogItem) => x.preview && starHere(x.view.id, x.preview, ctl.current?.time() ?? 0, x.star);
+  const unstar = (x: BacklogItem) => (x.preview && x.star != null ? () => clearStar(x.view.id, x.preview!, x.star!) : null);
 
   useEffect(() => {
     if (phase !== "feed") return;
@@ -156,6 +157,7 @@ export default function PlayNowPage() {
       else if (e.key === " ") ctl.current?.toggle();
       else if (e.key === "Enter" && current) togglePick(current.view.id);
       else if (e.key === "s" && current) star(current);
+      else if (e.key === "S" && current) unstar(current)?.();
       else return;
       e.preventDefault();
     };
@@ -260,7 +262,7 @@ export default function PlayNowPage() {
                       {entry.tuning && <span className="badge">{entry.tuning}</span>}
                       {x.duration != null && <span className="badge">{clock(x.duration)}</span>}
                       {x.star != null && (
-                        <span className="badge">
+                        <span {...holdFor(unstar(x))} className="badge star-hold">
                           <Star fill="currentColor" /> {clock(x.star)}
                         </span>
                       )}
@@ -270,7 +272,12 @@ export default function PlayNowPage() {
                   </div>
 
                   <div className="feed-rail">
-                    <button className={`rail-btn ${x.star != null ? "starred" : ""}`} onClick={() => star(x)} aria-label="Star this moment">
+                    <button
+                      {...holdFor(unstar(x))}
+                      className={`rail-btn star-hold ${x.star != null ? "starred" : ""}`}
+                      onClick={() => star(x)}
+                      aria-label={x.star != null ? "Move the star here (hold to remove)" : "Star this moment"}
+                    >
                       <Star fill={x.star != null ? "currentColor" : "none"} />
                       <span>{x.star != null ? "Move ⭐" : "Star"}</span>
                     </button>
