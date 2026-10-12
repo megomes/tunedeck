@@ -52,6 +52,9 @@ API (`/api/snapshot`, `/api/ops`) with a session saved in `.env.sync` (git-ignor
 
    New songs land at the top of **Backlog** (guitar) in plan order; video title, channel and duration
    are filled from the playlist. It's idempotent: videos already on an entry are skipped.
+   Then each touched song without a tab gets its Songsterr tab (most viewed exact match, via
+   `desktop/songsterr.js`) and, when its tuning is empty, the tab's tuning. `node scripts/playlist-sync.mjs tabs`
+   does that for the whole library. Tabs or tunings set by hand are never replaced.
    Every handled video id goes into the `playlistSeen` setting, so songs the user deleted never come
    back. The app's **Playlist** button (phone + desktop app, `desktop/main.js` → `syncPlaylist`) does the
    same flow with `claude -p` on the PC and shares that setting.

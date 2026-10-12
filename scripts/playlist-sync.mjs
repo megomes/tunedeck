@@ -2,7 +2,8 @@
 //
 //   node scripts/playlist-sync.mjs login           Asks for the access code once, saves a session in .env.sync
 //   node scripts/playlist-sync.mjs new [out.json]  Playlist videos that are not in TuneDeck yet + the existing songs
-//   node scripts/playlist-sync.mjs apply plan.json Adds the songs/covers described in plan.json
+//   node scripts/playlist-sync.mjs apply plan.json Adds the songs/covers described in plan.json, then their tabs
+//   node scripts/playlist-sync.mjs tabs            Fills in the Songsterr tab of every song that has none
 //
 // plan.json: [{ "title": "Scar Tissue", "artist": "Red Hot Chili Peppers", "entryId"?: "...",
 //               "videos": [{ "id": "xVphdYl6JxQ", "type"?: "guitar_cover" }] }]
@@ -14,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
+import songsterr from "../desktop/songsterr.js";
 
 const PLAYLIST = "https://www.youtube.com/playlist?list=PL8HBPDLAQBBLEmOYUdEWoRgUycSotH2KB";
 const ENV_FILE = path.join(import.meta.dirname, "..", ".env.sync");
@@ -203,18 +205,41 @@ async function apply(planFile) {
     }
   }
 
+  const touched = new Set();
+  for (const op of ops) touched.add(op.entry?.id ?? op.resource?.repertoireEntryId);
   const seen = [...new Set([...seenIds(snap), ...plan.flatMap((item) => item.videos.map((v) => v.id))])];
   ops.push({ t: "setting.set", key: "playlistSeen", value: seen });
   for (let i = 0; i < ops.length; i += 400) {
     await api("/api/ops", { method: "POST", body: JSON.stringify({ ops: ops.slice(i, i + 400) }) });
   }
   console.log(`Done: ${created} new songs in ${STATUS}, ${added} videos added.`);
+  await fillTabs(touched);
+}
+
+/** Songsterr tab (the most viewed match) for songs without one; the tuning too when it is empty. */
+async function fillTabs(onlyEntryIds) {
+  const snap = await api("/api/snapshot");
+  const songs = new Map(snap.songs.map((s) => [s.id, s]));
+  const todo = snap.entries
+    .filter((e) => !e.songsterrUrl && e.instrument === "guitar" && (!onlyEntryIds || onlyEntryIds.has(e.id)))
+    .map((e) => ({ entry: e, title: songs.get(e.songId)?.title ?? "", artist: songs.get(e.songId)?.artist ?? "" }));
+  const tabs = await songsterr.findTabs(todo);
+  const now = new Date().toISOString();
+  const ops = [];
+  for (const item of todo) {
+    const tab = tabs.get(item);
+    if (!tab) continue;
+    ops.push({ t: "entry.upsert", entry: { ...item.entry, songsterrUrl: tab.url, tuning: item.entry.tuning ?? tab.tuning, updatedAt: now } });
+    console.log(`  ${item.artist} — ${item.title}: ${tab.url}${!item.entry.tuning && tab.tuning ? ` (${tab.tuning})` : ""}`);
+  }
+  if (ops.length) await api("/api/ops", { method: "POST", body: JSON.stringify({ ops }) });
+  console.log(`Tabs: ${ops.length} of ${todo.length} songs without one found on Songsterr.`);
 }
 
 const [cmd, arg] = process.argv.slice(2);
-const run = { login, new: () => listNew(arg), apply: () => apply(arg) }[cmd];
+const run = { login, new: () => listNew(arg), apply: () => apply(arg), tabs: () => fillTabs(null) }[cmd];
 if (!run) {
-  console.error("Usage: node scripts/playlist-sync.mjs login | new [out.json] | apply plan.json");
+  console.error("Usage: node scripts/playlist-sync.mjs login | new [out.json] | apply plan.json | tabs");
   process.exit(1);
 }
 run().catch((e) => {

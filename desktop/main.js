@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { findTabs } = require("./songsterr");
 
 // Your TuneDeck deployment: typed on the sign-in screen, or preset with TUNEDECK_SERVER.
 const DEFAULT_SERVER = process.env.TUNEDECK_SERVER || "";
@@ -686,6 +687,11 @@ async function syncPlaylist(url) {
     .map((e) => ({ entryId: e.id, title: songTitles.get(e.songId)?.title ?? "", artist: songTitles.get(e.songId)?.artist ?? "" }));
   const plan = await namePlaylistVideos(fresh, existing);
 
+  // Songsterr tab (and tuning) for new songs and for songs that don't have a tab yet.
+  sendPlaylist({ state: "running", step: "Finding Songsterr tabs" });
+  const entryOf = (song) => (song.entryId ? snap.entries.find((e) => e.id === song.entryId) : null);
+  const tabs = await findTabs(plan.filter((song) => !entryOf(song)?.songsterrUrl));
+
   sendPlaylist({ state: "running", step: "Adding to the Backlog" });
   const byId = new Map(fresh.map((v) => [v.id, v]));
   const now = new Date().toISOString();
@@ -695,8 +701,16 @@ async function syncPlaylist(url) {
   let top = Math.min(0, ...snap.entries.filter((e) => e.status === "BACKLOG").map((e) => e.position)) - plan.length;
   let created = 0;
   let added = 0;
+  let tabbed = 0;
   for (const song of plan) {
-    let entry = song.entryId ? snap.entries.find((e) => e.id === song.entryId) : null;
+    let entry = entryOf(song);
+    const tab = tabs.get(song);
+    if (entry && tab) {
+      // Only fills what is empty: a tab or tuning picked by hand stays.
+      entry = { ...entry, songsterrUrl: tab.url, tuning: entry.tuning ?? tab.tuning, updatedAt: now };
+      ops.push({ t: "entry.upsert", entry });
+      tabbed++;
+    }
     if (!entry) {
       const songId = crypto.randomUUID();
       ops.push({
@@ -704,13 +718,14 @@ async function syncPlaylist(url) {
         song: { id: songId, title: song.title.trim(), artist: song.artist.trim(), album: null, genre: null, bpm: null, createdAt: now, updatedAt: now },
       });
       entry = {
-        id: crypto.randomUUID(), songId, instrument: "guitar", status: "BACKLOG", tuning: null, capo: null, difficulty: null,
-        songsterrUrl: null, playCount: 0, lastPlayedAt: null, isFavorite: false, riffOnly: false, position: top++,
+        id: crypto.randomUUID(), songId, instrument: "guitar", status: "BACKLOG", tuning: tab?.tuning ?? null, capo: null, difficulty: null,
+        songsterrUrl: tab?.url ?? null, playCount: 0, lastPlayedAt: null, isFavorite: false, riffOnly: false, position: top++,
         createdAt: now, updatedAt: now,
       };
       ops.push({ t: "entry.upsert", entry });
       names.push(`${song.title} (${song.artist})`);
       created++;
+      if (tab) tabbed++;
     }
     for (const id of song.videos) {
       const v = byId.get(id);
@@ -733,7 +748,7 @@ async function syncPlaylist(url) {
     const res = await apiFetch("/api/ops", { method: "POST", body: JSON.stringify({ ops: ops.slice(i, i + 400) }) });
     if (!res.ok) throw new Error(`Server error (${res.status})`);
   }
-  return { songs: created, videos: added, names };
+  return { songs: created, videos: added, tabs: tabbed, names };
 }
 
 /** One sync at a time: a second request while one runs waits for the same result. */
