@@ -12,7 +12,7 @@ import { moveEntry } from "@/lib/client/actions";
 import { daysSince } from "@/lib/client/format";
 import { useData, useLoaded } from "@/lib/client/store";
 import { useViews, type SongView } from "@/lib/client/views";
-import { INSTRUMENT_LABEL, type Instrument, type Status } from "@/lib/shared/types";
+import { BOARD_STATUSES, INSTRUMENT_LABEL, UP_NEXT_MAX, type Instrument, type Status } from "@/lib/shared/types";
 import { normalizeKey } from "@/lib/shared/urls";
 
 type Quick = "pinned" | "tab" | "stale";
@@ -64,8 +64,8 @@ function Board() {
   const loaded = useLoaded();
   const data = useData();
   const allViews = useViews();
-  // Riff-only songs live in the Riffs tab, not on the board.
-  const views = useMemo(() => allViews.filter((v) => !v.entry.riffOnly), [allViews]);
+  // Riff-only songs live in the Riffs tab and the Backlog has its own page: neither is on the board.
+  const views = useMemo(() => allViews.filter((v) => !v.entry.riffOnly && v.entry.status !== "BACKLOG"), [allViews]);
 
   const [tuning, setTuning] = useState<string | null>(params.get("tuning"));
   const [tagIds, setTagIds] = useState<string[]>(params.get("tag") ? [params.get("tag")!] : []);
@@ -114,7 +114,7 @@ function Board() {
       </>
     );
   }
-  if (!views.length) {
+  if (!allViews.length) {
     return (
       <>
         <TopBar brand />
@@ -146,8 +146,10 @@ function Board() {
         items={items}
         all={all}
         onMove={moveEntry}
+        statuses={BOARD_STATUSES}
+        count={(s, n) => (s === "WANT_TO_PLAY" ? `${n}/${UP_NEXT_MAX}` : n)}
         emptyLabel="Drop songs here"
-        addHref={(s) => `/add?manual=1&status=${s}`}
+        addHref={(s) => (s === "WANT_TO_PLAY" ? "/backlog" : `/add?manual=1&status=${s}`)}
         initialStatus={loaded ? (params.get("status") as Status | null) : null}
         renderCard={(x, drag, wasDragging) =>
           drag ? (

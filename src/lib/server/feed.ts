@@ -144,7 +144,7 @@ export function feedToMarkdown(feed: Feed): string {
     "",
     `Generated ${feed.generatedAt}. ${feed.summary.songs} songs.`,
     "",
-    "Statuses: Want to Play (wishlist) → Learning (practicing now) → Can Play → Mastered; Archived and Backlog are parked.",
+    "Statuses: Backlog (saved videos, maybe someday) → Up Next (short queue of the next songs to learn) → Learning (practicing now) → Can Play → Mastered; Archived is parked.",
     "Riffs are parts of a song (intro, solo…) learned on their own, each with its own status, independent of the song's status.",
     "",
   ];

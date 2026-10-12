@@ -13,7 +13,7 @@ import type {
   Status,
   Tag,
 } from "@/lib/shared/types";
-import { RESOURCE_SHORT, RIFF_COLORS, STATUS_LABEL } from "@/lib/shared/types";
+import { RESOURCE_SHORT, RIFF_COLORS, STATUS_LABEL, UP_NEXT_MAX } from "@/lib/shared/types";
 import { detectProvider, normalizeUrl, youtubeId, ytThumb } from "@/lib/shared/urls";
 import { hasLocalVideo } from "./offline";
 import { api, dispatch, enrichJam, enrichResource, getState } from "./store";
@@ -99,15 +99,46 @@ export function updateEntry(entryId: string, patch: Partial<Omit<Entry, "id" | "
   dispatch({ t: "entry.upsert", entry: { ...e, ...patch, updatedAt: now() } });
 }
 
-/** Moves a card on the board: new column and/or new manual position. */
-export function moveEntry(entryId: string, status: Status, position: number) {
+/** Songs in Up Next, top first. */
+export function upNext() {
+  return getState()
+    .data.entries.filter((e) => e.status === "WANT_TO_PLAY" && !e.riffOnly)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0) || b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Room left in Up Next. */
+export const upNextFree = () => Math.max(0, UP_NEXT_MAX - upNext().length);
+
+function upNextFull(entryId: string) {
+  const queue = upNext();
+  const last = queue[queue.length - 1];
+  toast(`Up Next is full (${UP_NEXT_MAX})`, last && {
+    label: "Swap last",
+    run: () => {
+      // The last one goes back to the Backlog to make room.
+      updateEntry(last.id, { status: "BACKLOG", position: topPosition("BACKLOG", last.id) });
+      updateEntry(entryId, { status: "WANT_TO_PLAY", position: (last.position ?? 0) + 1 });
+    },
+  });
+}
+
+/**
+ * Moves a card on the board: new column and/or new manual position.
+ * Up Next holds at most UP_NEXT_MAX songs; a move into a full queue is refused (returns false).
+ */
+export function moveEntry(entryId: string, status: Status, position: number): boolean {
   const e = entry(entryId);
-  if (!e || (e.status === status && e.position === position)) return;
+  if (!e || (e.status === status && e.position === position)) return true;
+  if (status === "WANT_TO_PLAY" && e.status !== status && !e.riffOnly && upNextFree() === 0) {
+    upNextFull(entryId);
+    return false;
+  }
   const prev = { status: e.status, position: e.position };
   updateEntry(entryId, { status, position });
   if (prev.status !== status) {
     toast(`Moved to ${STATUS_LABEL[status]}`, { label: "Undo", run: () => updateEntry(entryId, prev) });
   }
+  return true;
 }
 
 /** Status change from outside the board: the card lands at the top of its new column. */
@@ -115,6 +146,64 @@ export function setStatus(entryId: string, status: Status) {
   const e = entry(entryId);
   if (!e || e.status === status) return;
   moveEntry(entryId, status, topPosition(status, entryId));
+}
+
+/** Queues a Backlog song at the end of Up Next. */
+export function addToUpNext(entryId: string) {
+  const e = entry(entryId);
+  if (!e || e.status === "WANT_TO_PLAY") return true;
+  const queue = upNext();
+  const end = queue.length ? Math.max(...queue.map((x) => x.position ?? 0)) + 1 : 0;
+  return moveEntry(entryId, "WANT_TO_PLAY", end);
+}
+
+/** Several songs at once, as many as fit; returns how many were queued. */
+export function addManyToUpNext(entryIds: string[]) {
+  const room = upNextFree();
+  const ids = entryIds.filter((id) => entry(id)?.status !== "WANT_TO_PLAY").slice(0, room);
+  const queue = upNext();
+  let end = queue.length ? Math.max(...queue.map((x) => x.position ?? 0)) + 1 : 0;
+  const before = ids.map((id) => ({ id, status: entry(id)!.status, position: entry(id)!.position }));
+  for (const id of ids) updateEntry(id, { status: "WANT_TO_PLAY", position: end++ });
+  if (ids.length) {
+    toast(`${ids.length} added to Up Next${ids.length < entryIds.length ? " (it's full)" : ""}`, {
+      label: "Undo",
+      run: () => before.forEach((b) => updateEntry(b.id, { status: b.status, position: b.position })),
+    });
+  } else if (entryIds.length) toast(`Up Next is full (${UP_NEXT_MAX})`);
+  return ids.length;
+}
+
+/** Several songs to one status (bulk actions in the Backlog). */
+export function setManyStatus(entryIds: string[], status: Status) {
+  const before = entryIds.map((id) => ({ id, status: entry(id)!.status, position: entry(id)!.position }));
+  let top = topPosition(status);
+  for (const id of entryIds) updateEntry(id, { status, position: top-- });
+  toast(`${entryIds.length} moved to ${STATUS_LABEL[status]}`, {
+    label: "Undo",
+    run: () => before.forEach((b) => updateEntry(b.id, { status: b.status, position: b.position })),
+  });
+}
+
+/** The ⭐: where the favorite passage of a video starts. null clears it. */
+export function setStar(entryId: string, resourceId: string, sec: number | null) {
+  const e = entry(entryId);
+  if (!e) return;
+  const stars = { ...(e.stars ?? {}) };
+  if (sec == null) delete stars[resourceId];
+  else stars[resourceId] = Math.max(0, Math.round(sec * 10) / 10);
+  updateEntry(entryId, { stars });
+}
+
+/** Adds to each song's pick score (picked songs show up earlier in the next round). */
+export function addPickScores(deltas: Record<string, number>) {
+  const ops = [];
+  for (const [id, d] of Object.entries(deltas)) {
+    const e = entry(id);
+    if (!e || !d) continue;
+    ops.push({ t: "entry.upsert" as const, entry: { ...e, pickScore: (e.pickScore ?? 0) + d, updatedAt: now() } });
+  }
+  if (ops.length) dispatch(...ops);
 }
 
 /** Whole song ↔ just riffs. Riff-only songs leave the Library board and live in the Riffs tab. */

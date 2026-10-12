@@ -53,8 +53,14 @@ and every YouTube original, cover, lesson and backing track, one tap away.
 
 ## How it works
 
-- **Board.** The Library is a kanban (`src/app/(app)/page.tsx`): Want to Play → Learning → Can Play →
-  Mastered → Archived. Drag cards between columns or reorder inside one (manual `position` per entry).
+- **Backlog.** Saved covers wait on their own page (`src/app/(app)/backlog/page.tsx`): a video grid with
+  grouping, sorting and filters. On phones and tablets, tapping a video that's saved on the device plays
+  a short clip starting at its ⭐ (the favorite passage you marked), or at a few points in the middle.
+  **What do I play now?** (`backlog/play`) is a vertical swipe feed of those clips: pick up to 5, then
+  the one to play. Picks show up earlier next time and skipped songs show up later (`pickScore`).
+- **Board.** The Library is a kanban (`src/app/(app)/page.tsx`): Up Next → Learning → Can Play →
+  Mastered → Archived. Up Next is the Want to Play status, kept to 5 songs: the queue that links the
+  Backlog to the Library. Drag cards between columns or reorder inside one (manual `position` per entry).
   On phones: one column per screen, swipe between them, long-press to drag, or drop on the sticky
   status pills to move a card to any column.
 - **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)

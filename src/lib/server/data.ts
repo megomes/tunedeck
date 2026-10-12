@@ -46,6 +46,7 @@ export async function loadSnapshot(): Promise<Snapshot> {
       ...x,
       instrument: x.instrument as Snapshot["entries"][number]["instrument"],
       status: x.status as Snapshot["entries"][number]["status"],
+      stars: (x.stars ?? {}) as Record<string, number>,
       lastPlayedAt: iso(x.lastPlayedAt),
       createdAt: isoReq(x.createdAt),
       updatedAt: isoReq(x.updatedAt),

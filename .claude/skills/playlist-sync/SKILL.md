@@ -1,6 +1,6 @@
 ---
 name: playlist-sync
-description: Pulls new videos from the user's "Guitar v2" YouTube playlist (guitar covers of songs they want to play) into the TuneDeck Library > Backlog. Use when they ask to sync/import/update the playlist, "pega as novidades da playlist", or add the playlist songs to TuneDeck.
+description: Pulls new videos from the user's "Guitar v2" YouTube playlist (guitar covers of songs they want to play) into the TuneDeck Backlog. Use when they ask to sync/import/update the playlist, "pega as novidades da playlist", or add the playlist songs to TuneDeck.
 ---
 
 # Playlist → TuneDeck Backlog

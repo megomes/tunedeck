@@ -26,6 +26,7 @@ import { InstrumentChips, StatusChips } from "@/components/Pickers";
 import { APP_VERSION } from "@/components/SyncBadge";
 import { TopBar } from "@/components/TopBar";
 import { setSetting } from "@/lib/client/actions";
+import { CLIP_OPTIONS, clipSeconds } from "@/lib/client/backlog";
 import { timeAgo } from "@/lib/client/format";
 import { api, clearLocalCache, sync, useData, useStore } from "@/lib/client/store";
 import { toast } from "@/lib/client/ui";
@@ -66,10 +67,11 @@ Como ler:
   com status próprio, independente do status da música.
 - Músicas em "Just riffs" são aquelas em que eu só quero os riffs, não a música inteira.
 - Os status são:
-  - Want to Play: quero aprender
+  - Up Next: as próximas que vou aprender (fila curta, até 5)
   - Learning: estou praticando agora
   - Can Play e Mastered: já toco
-  - Archived e Backlog: parado
+  - Backlog: vídeos guardados que talvez eu aprenda um dia
+  - Archived: parado
 - Use só o que está no link como fonte do meu repertório.
 - Sempre que eu perguntar algo sobre as músicas que eu toco, consulte o link de novo,
   porque ele muda.
@@ -263,6 +265,26 @@ export default function SettingsPage() {
         </section>
 
         <OfflineVideosSection />
+
+        <section className="section">
+          <p className="step-title">Backlog previews</p>
+          <div className="panel form-grid">
+            <div className="field">
+              <span className="label">Clip length</span>
+              <div className="segmented">
+                {CLIP_OPTIONS.map((n) => (
+                  <button key={n} className={`chip sm ${clipSeconds(data.settings) === n ? "active" : ""}`} onClick={() => setSetting("clipSeconds", n)}>
+                    {n} s
+                  </button>
+                ))}
+              </div>
+              <span className="hint">
+                On phones and tablets, Backlog videos saved on the device play short clips: from the ⭐ you marked, then a few spots
+                in the middle of the song.
+              </span>
+            </div>
+          </div>
+        </section>
 
         <section className="section">
           <p className="step-title">Tunings</p>

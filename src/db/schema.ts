@@ -47,6 +47,10 @@ export const repertoireEntries = pgTable(
     riffOnly: boolean("riff_only").notNull().default(false),
     /** Manual order inside its status column on the board (lower = higher up). */
     position: doublePrecision("position").notNull().default(0),
+    /** Backlog preview: where the favorite passage starts in each video (seconds, keyed by resource id). */
+    stars: jsonb("stars").notNull().default({}),
+    /** "What do I play now?": goes up when picked, down when skipped; picks show first next time. */
+    pickScore: integer("pick_score").notNull().default(0),
     createdAt: ts("created_at").notNull().defaultNow(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },

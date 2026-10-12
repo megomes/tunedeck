@@ -71,6 +71,7 @@ function Column<T extends KanbanItem>({
   highlight,
   addHref,
   emptyLabel,
+  count,
 }: {
   status: Status;
   items: T[];
@@ -78,6 +79,7 @@ function Column<T extends KanbanItem>({
   highlight: boolean;
   addHref?: (s: Status) => string | null;
   emptyLabel: string;
+  count?: (s: Status, n: number) => ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: colId(status) });
   const href = addHref?.(status);
@@ -86,7 +88,7 @@ function Column<T extends KanbanItem>({
       <header className="board-col-head">
         <span className="status-badge" data-status={status} />
         <h2>{STATUS_LABEL[status]}</h2>
-        <span className="meta">{items.length}</span>
+        <span className="meta">{count ? count(status, items.length) : items.length}</span>
         {href && (
           <Link href={href} className="icon-btn sm muted" aria-label={`Add to ${STATUS_LABEL[status]}`}>
             <Plus />
@@ -134,6 +136,8 @@ export function Kanban<T extends KanbanItem>({
   addHref,
   emptyLabel,
   initialStatus,
+  statuses = STATUSES,
+  count,
 }: {
   /** Items shown (after filters). */
   items: T[];
@@ -147,15 +151,19 @@ export function Kanban<T extends KanbanItem>({
   addHref?: (s: Status) => string | null;
   emptyLabel: string;
   initialStatus?: Status | null;
+  /** The columns, in order. */
+  statuses?: readonly Status[];
+  /** Column header count (default: the number of cards). */
+  count?: (s: Status, n: number) => ReactNode;
 }) {
   const boardRef = useRef<HTMLDivElement>(null);
   const [activeCol, setActiveCol] = useState<Status>("WANT_TO_PLAY");
 
   const derived = useMemo(() => {
-    const cols = Object.fromEntries(STATUSES.map((s) => [s, [] as string[]])) as Columns;
+    const cols = Object.fromEntries(statuses.map((s) => [s, [] as string[]])) as Columns;
     for (const x of items.slice().sort(byPosition)) cols[x.status]?.push(x.id);
     return cols;
-  }, [items]);
+  }, [items, statuses]);
   const byId = useMemo(() => new Map(all.map((x) => [x.id, x])), [all]);
 
   const [cols, setCols] = useState<Columns | null>(null); // live layout while dragging
@@ -172,7 +180,7 @@ export function Kanban<T extends KanbanItem>({
   );
 
   const containerOf = (id: string, c: Columns): Status | null =>
-    statusOfDroppable(id) ?? STATUSES.find((s) => c[s].includes(id)) ?? null;
+    statusOfDroppable(id) ?? statuses.find((s) => c[s]?.includes(id)) ?? null;
 
   const onDragStart = (e: DragStartEvent) => {
     setActiveId(String(e.active.id));
@@ -256,16 +264,16 @@ export function Kanban<T extends KanbanItem>({
       const first = el.firstElementChild as HTMLElement | null;
       if (!first) return;
       const w = first.getBoundingClientRect().width + 12;
-      setActiveCol(STATUSES[Math.min(STATUSES.length - 1, Math.round(el.scrollLeft / w))]);
+      setActiveCol(statuses[Math.min(statuses.length - 1, Math.round(el.scrollLeft / w))]);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [statuses]);
 
   // Deep links like ?status=LEARNING open on that column.
   useEffect(() => {
-    if (initialStatus && STATUSES.includes(initialStatus)) setTimeout(() => scrollToColumn(initialStatus), 50);
-  }, [initialStatus]);
+    if (initialStatus && statuses.includes(initialStatus)) setTimeout(() => scrollToColumn(initialStatus), 50);
+  }, [initialStatus, statuses]);
 
   const activeItem = activeId ? byId.get(activeId) : null;
   const render = (x: T, drag: DragBits | null) => renderCard(x, drag, wasDragging);
@@ -282,17 +290,18 @@ export function Kanban<T extends KanbanItem>({
       <div className="container board-filters">
         {filters}
         <div className="status-strip mobile-only">
-          {STATUSES.map((s) => (
+          {statuses.map((s) => (
             <StatusPill key={s} status={s} count={layout[s].length} active={activeCol === s} dragging={!!activeId} onClick={() => scrollToColumn(s)} />
           ))}
         </div>
       </div>
 
       <div ref={boardRef} className={`board ${activeId ? "is-dragging" : ""}`}>
-        {STATUSES.map((s) => (
+        {statuses.map((s) => (
           <Column
             key={s}
             status={s}
+            count={count}
             items={layout[s].map((id) => byId.get(id)!).filter(Boolean)}
             render={render}
             highlight={overStatus === s}

@@ -4,6 +4,10 @@ export type Instrument = (typeof INSTRUMENTS)[number];
 /** Board order: want → in progress → done, then the parked columns on the far right. */
 export const STATUSES = ["WANT_TO_PLAY", "LEARNING", "CAN_PLAY", "MASTERED", "ARCHIVED", "BACKLOG"] as const;
 export type Status = (typeof STATUSES)[number];
+/** The Library board: everything but the Backlog, which has its own page. */
+export const BOARD_STATUSES = STATUSES.filter((s) => s !== "BACKLOG");
+/** Up Next (the Want to Play column) is a short queue: the songs pulled out of the Backlog to play next. */
+export const UP_NEXT_MAX = 5;
 
 export const RESOURCE_TYPES = [
   "original",
@@ -35,7 +39,7 @@ export const INSTRUMENT_LABEL: Record<Instrument, string> = {
 };
 
 export const STATUS_LABEL: Record<Status, string> = {
-  WANT_TO_PLAY: "Want to Play",
+  WANT_TO_PLAY: "Up Next",
   LEARNING: "Learning",
   CAN_PLAY: "Can Play",
   MASTERED: "Mastered",
@@ -100,6 +104,10 @@ export interface Entry {
   riffOnly?: boolean;
   /** Manual order inside its status column (lower = higher up). */
   position: number;
+  /** Where the favorite passage starts in each video, in seconds, keyed by resource id. */
+  stars?: Record<string, number>;
+  /** Up when picked in "What do I play now?", down when skipped. */
+  pickScore?: number;
   createdAt: string;
   updatedAt: string;
 }
