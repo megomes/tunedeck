@@ -259,6 +259,7 @@ async function checkTools() {
     ytdlp: y.ok ? y.stdout.trim() : null,
     ffmpeg: f.ok ? (f.stdout.match(/ffmpeg version (\S+)/)?.[1] ?? "ok") : null,
     rubberband: filters.ok && /\brubberband\b/.test(filters.stdout),
+    claude: c.ok ? c.stdout.trim().split(/\s/)[0] : null,
     checked: true,
   };
   push();
@@ -434,6 +435,42 @@ function errorFrom(output) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// YouTube sometimes asks yt-dlp to "sign in to confirm you're not a bot". When it does, use the
+// YouTube session of a browser on this PC for the rest of the run. Firefox comes first because
+// Chrome and Edge lock their cookies on Windows. TUNEDECK_COOKIES_BROWSER picks one explicitly.
+const BOT_CHECK = /confirm you.re not a bot|Sign in to confirm/i;
+let cookiesBrowser = null;
+
+function pickCookiesBrowser() {
+  if (process.env.TUNEDECK_COOKIES_BROWSER) return process.env.TUNEDECK_COOKIES_BROWSER;
+  const local = process.env.LOCALAPPDATA ?? "";
+  const candidates = [
+    ["firefox", path.join(process.env.APPDATA ?? "", "Mozilla", "Firefox", "Profiles")],
+    ["edge", path.join(local, "Microsoft", "Edge", "User Data")],
+    ["chrome", path.join(local, "Google", "Chrome", "User Data")],
+    ["brave", path.join(local, "BraveSoftware", "Brave-Browser", "User Data")],
+  ];
+  return candidates.find(([, dir]) => fs.existsSync(dir))?.[0] ?? null;
+}
+
+const cookieArgs = () => (cookiesBrowser ? ["--cookies-from-browser", cookiesBrowser] : []);
+
+/** After a bot check, switches yt-dlp to browser cookies. True when there is something new to try. */
+function useCookiesAfter(err) {
+  if (cookiesBrowser || !BOT_CHECK.test(err?.message ?? "")) return false;
+  cookiesBrowser = pickCookiesBrowser();
+  return Boolean(cookiesBrowser);
+}
+
+function botCheckHelp(err) {
+  if (!BOT_CHECK.test(err?.message ?? "")) return err;
+  return new Error(
+    cookiesBrowser
+      ? `YouTube asked to confirm you're not a bot, even with ${cookiesBrowser}'s cookies. Open youtube.com in ${cookiesBrowser}, sign in, and try again.`
+      : "YouTube asked to confirm you're not a bot. Sign in to YouTube in Firefox on this PC and try again.",
+  );
+}
+
 // YouTube sometimes answers 403 for a while (expired links, throttling). Try again with a fresh
 // extraction, and as a last resort take the 360p single-file format, which is rarely blocked.
 const BEST = "bv*[height<=720][vcodec^=avc1]+ba[ext=m4a]/b[height<=720][ext=mp4]/bv*[height<=720]+ba/b";
@@ -454,10 +491,18 @@ async function download(job) {
     try {
       return await downloadOnce(job, attempt.format, attempt.step);
     } catch (err) {
+      if (useCookiesAfter(err)) {
+        try {
+          return await downloadOnce(job, attempt.format, `Downloading with ${cookiesBrowser}'s YouTube sign-in`);
+        } catch (retryErr) {
+          err = retryErr;
+        }
+      }
       lastError = err;
+      if (BOT_CHECK.test(err.message)) break;
     }
   }
-  throw lastError;
+  throw botCheckHelp(lastError);
 }
 
 async function downloadOnce(job, format, step) {
@@ -469,6 +514,7 @@ async function downloadOnce(job, format, step) {
   await spawnLogged(
     "yt-dlp",
     [
+      ...cookieArgs(),
       "--newline",
       "--no-playlist",
       "--no-mtime",
@@ -596,9 +642,11 @@ function runWithInput(cmd, args, input, timeoutMs) {
 }
 
 async function playlistVideos(url) {
-  const r = await run("yt-dlp", ["--flat-playlist", "-J", "--no-warnings", url]);
+  const read = () => run("yt-dlp", [...cookieArgs(), "--flat-playlist", "-J", "--no-warnings", url]);
+  let r = await read();
+  if (!r.ok && useCookiesAfter(new Error(r.stderr))) r = await read();
   if (!r.ok) {
-    const why = errorFrom(r.stderr);
+    const why = botCheckHelp(new Error(errorFrom(r.stderr))).message;
     throw new Error(/does not exist/i.test(why) ? "Can't read the playlist: make it Unlisted or Public on YouTube" : why || "yt-dlp failed");
   }
   const seen = new Set();
