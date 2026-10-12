@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, Inbox, Kanban, Plus, Settings, Tags, X, Zap } from "lucide-react";
+import { AudioLines, Headphones, Inbox, Kanban, Plus, Settings, Tags, X, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
@@ -21,11 +21,12 @@ const NAV = [
   { href: "/", label: "Library", icon: Kanban },
   { href: "/riffs", label: "Riffs", icon: Zap },
   { href: "/jam", label: "Jam", icon: AudioLines },
+  { href: "/listen", label: "Listen", icon: Headphones },
   { href: "/tags", label: "Tags", icon: Tags },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
-/** The phone bar has room for five; Tags stays reachable from Settings. */
-const PHONE_NAV = NAV.filter((n) => n.href !== "/tags");
+/** The phone bar has room for five; Tags stays reachable from Settings, Listen from the Library's top bar. */
+const PHONE_NAV = NAV.filter((n) => n.href !== "/tags" && n.href !== "/listen");
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";

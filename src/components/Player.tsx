@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, Sparkles, Star, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, Gauge, Guitar, Play, Plus, SkipForward, Sparkles, Star, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { jamPlayed, openLink, openResource, openSongsterr, placeSameRecording, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
+import { detachRadio, radioNext, radioPrev, stopRadio, useRadio } from "@/lib/client/radio";
 import { useData } from "@/lib/client/store";
 import { closePlayer, playVideo, readPref, setPlayerExpanded, toast, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
@@ -16,6 +17,7 @@ import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
 import { clearStar, holdFor, starHere } from "./BacklogCard";
 import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
+import { CarMode, RadioPanel } from "./RadioControls";
 import { RiffBar } from "./RiffBar";
 import { SourceBadge } from "./SourceBadge";
 import { Thumb } from "./Thumb";
@@ -207,6 +209,19 @@ export function Player() {
           }
         : null;
 
+  // --- radio (listening to a playlist) -----------------------------------
+  const radio = useRadio();
+  const track = radio?.tracks[radio.index];
+  const onAir = !!radio && !!track && state?.kind === "resource" && track.entryId === state.entryId;
+  const onAirRef = useRef(onAir);
+  useEffect(() => {
+    onAirRef.current = onAir;
+  });
+  // Opening another song (or closing the player) leaves the radio.
+  useEffect(() => {
+    if (radio && (!state || (state.kind === "resource" ? state.entryId !== track?.entryId : true))) detachRadio();
+  }, [radio, state, track?.entryId]);
+
   const wrap = useRef<HTMLDivElement>(null);
   const yt = useRef<YTPlayer | null>(null);
   const engine = useRef<Engine | null>(null);
@@ -237,7 +252,7 @@ export function Player() {
   });
   const requestedStart = (() => {
     const r = requestedRiff ? data.riffs.find((x) => x.id === requestedRiff) : undefined;
-    return r && resource ? r.marks[resource.id]?.a : undefined;
+    return r && resource ? r.marks[resource.id]?.a : state?.kind === "resource" ? state.start : undefined;
   })();
 
   /** Seeks made by the loop itself; jumps right after one are not the user's. */
@@ -352,7 +367,7 @@ export function Player() {
       const r = sample(take.current, p.time());
       take.current = r.take;
       const threshold = thresholdFor(p.duration() || media?.durationSeconds);
-      if (!take.current.counted && take.current.watched >= threshold && autoRef.current && playedRef.current) {
+      if (!take.current.counted && take.current.watched >= threshold && autoRef.current && !onAirRef.current && playedRef.current) {
         take.current = { ...take.current, counted: true };
         playedRef.current(true);
         setBurst((b) => b + 1);
@@ -418,6 +433,75 @@ export function Player() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, media?.key, native]);
 
+  // Radio: at the end of a song (or of its best part) the next one starts. Listening never counts a +1.
+  const trackStart = useRef(0);
+  useEffect(() => {
+    trackStart.current = performance.now();
+  }, [radio?.seq]);
+  useEffect(() => {
+    if (!onAir) return;
+    const id = setInterval(() => {
+      const p = engine.current;
+      const r = radio;
+      if (!p || !r || performance.now() - trackStart.current < 2500) return;
+      const t = p.time();
+      const d = p.duration();
+      const end = r.tracks[r.index]?.end;
+      if ((end != null && t >= end) || (d > 0 && t >= d - 0.8 && !p.playing())) void radioNext("end");
+    }, 400);
+    return () => clearInterval(id);
+  }, [onAir, radio]);
+  // A video that can't play here is skipped.
+  useEffect(() => {
+    if (!onAir || !error) return;
+    const id = setTimeout(() => void radioNext("error"), 2500);
+    return () => clearTimeout(id);
+  }, [onAir, error, radio?.seq]);
+  // The same video again (a one-song queue going round): start it over.
+  const lastResource = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onAir) return;
+    if (lastResource.current === track?.resourceId) {
+      engine.current?.seek(track.start ?? 0);
+      engine.current?.play();
+    }
+    lastResource.current = track?.resourceId ?? null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [radio?.seq]);
+  // Lock screen, headphones and the car's steering-wheel buttons skip songs.
+  useEffect(() => {
+    const ms = typeof navigator !== "undefined" ? navigator.mediaSession : undefined;
+    if (!ms || !onAir || !view) return;
+    ms.metadata = new MediaMetadata({
+      title: view.song.title,
+      artist: view.song.artist,
+      album: radio?.playlist.name ?? "TuneDeck",
+      artwork: view.thumb ? [{ src: view.thumb, sizes: "480x360", type: "image/jpeg" }] : [],
+    });
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ["nexttrack", () => void radioNext("skip")],
+      ["previoustrack", () => radioPrev()],
+    ];
+    for (const [a, h] of handlers) {
+      try {
+        ms.setActionHandler(a, h);
+      } catch {
+        /* unsupported action */
+      }
+    }
+    return () => {
+      for (const [a] of handlers) {
+        try {
+          ms.setActionHandler(a, null);
+        } catch {
+          /* ignore */
+        }
+      }
+    };
+  }, [onAir, view, radio?.playlist.name]);
+
+  const close = onAir ? stopRadio : closePlayer;
+
   // Tear down when the player is closed.
   useEffect(() => {
     if (state) return;
@@ -440,9 +524,10 @@ export function Player() {
   }, [expanded]);
 
   if (!state || !media) return null;
+  const carMode = expanded && onAir && !!radio?.car && !!view;
 
   return (
-    <div className={`player ${expanded ? "expanded" : "mini"} ${native ? "native" : ""}`} role="region" aria-label="Video player">
+    <div className={`player ${expanded ? "expanded" : "mini"} ${native ? "native" : ""} ${carMode ? "car-mode" : ""}`} role="region" aria-label="Video player">
       {expanded && (
         <div className="player-head">
           <button className="icon-btn" aria-label="Minimize" onClick={() => setPlayerExpanded(false)}>
@@ -451,7 +536,7 @@ export function Player() {
           <span className="grow meta" style={{ textAlign: "center" }}>
             {media.label}
           </span>
-          <button className="icon-btn" aria-label="Close player" onClick={closePlayer}>
+          <button className="icon-btn" aria-label="Close player" onClick={close}>
             <X />
           </button>
         </div>
@@ -482,7 +567,7 @@ export function Player() {
             <span className="caption">Counted</span>
           </div>
         )}
-        {auto && (
+        {auto && !onAir && (
           <div className={`take-bar ${progress.counted ? "done" : ""}`} aria-hidden>
             <i style={{ width: `${Math.min(100, (progress.watched / progress.threshold) * 100)}%` }} />
           </div>
@@ -497,8 +582,12 @@ export function Player() {
         )}
       </div>
 
-      {expanded ? (
+      {carMode ? (
+        <CarMode radio={radio!} view={view!} engine={engine} />
+      ) : expanded ? (
         <div className="player-body">
+          {onAir && view && <RadioPanel radio={radio!} view={view} engine={engine} />}
+
           {/* Own player: its controls come first, right under (or beside) the video. */}
           {native && <div ref={setControlsHost} />}
 
@@ -547,7 +636,7 @@ export function Player() {
             </button>
           </div>
 
-          <div className="auto-row">
+          {!onAir && <div className="auto-row">
             <button
               className={`chip sm ${auto ? "active" : ""}`}
               aria-pressed={auto}
@@ -570,7 +659,7 @@ export function Player() {
                   : `Counts after ${clock(Math.max(0, progress.threshold - progress.watched))} more of playing. Skipping ahead doesn't count; rewinding starts a new take.`}
             </span>
             {auto && progress.counted && <Check size={16} color="var(--success)" />}
-          </div>
+          </div>}
 
           {jam && <JamInfo trackId={jam.id} />}
 
@@ -643,10 +732,16 @@ export function Player() {
             <span className="dock-title truncate">{media.miniTitle}</span>
             <span className="meta truncate">{media.label}</span>
           </button>
-          <button className="plus-one" aria-label="Played once more" onClick={markPlayed}>
-            <Plus />1
-          </button>
-          <button className="icon-btn sm muted" aria-label="Close player" onClick={closePlayer}>
+          {onAir ? (
+            <button className="icon-btn sm" aria-label="Next song" onClick={() => void radioNext("skip")}>
+              <SkipForward />
+            </button>
+          ) : (
+            <button className="plus-one" aria-label="Played once more" onClick={markPlayed}>
+              <Plus />1
+            </button>
+          )}
+          <button className="icon-btn sm muted" aria-label="Close player" onClick={close}>
             <X />
           </button>
         </>

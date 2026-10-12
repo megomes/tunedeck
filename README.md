@@ -64,6 +64,13 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   Backlog to the Library. Adding a sixth asks which one to swap back to the Backlog (with previews). Drag cards between columns or reorder inside one (manual `position` per entry).
   On phones: one column per screen, swipe between them, long-press to drag, or drop on the sticky
   status pills to move a card to any column.
+- **Listen.** The repertoire as a radio for the car (`src/app/(app)/listen/page.tsx`, `src/lib/client/radio.ts`):
+  every filter is a playlist (board column, tag, tuning, artist) plus mixes (Daily Mix, Don't Forget,
+  Best Moments, Fresh Finds, On Repeat). Songs advance on their own; choose originals, covers or backing
+  tracks, full songs or just the best part of each, a drive timer that cuts the queue to fit the trip,
+  and a DJ voice that says the next song and its tuning. Car mode has huge buttons and swipe-to-skip and
+  keeps the screen on; steering-wheel/headphone next and previous work. "Play these" on the Library plays
+  the current filter. Listening never counts as a +1.
 - **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)
   and minimize into a mini-player that keeps playing while you navigate. Songsterr links are a direct
   redirect so the OS can hand them to the Songsterr app.

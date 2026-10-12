@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardPaste, Library, Plus, Search, X } from "lucide-react";
+import { ClipboardPaste, Headphones, Library, Play, Plus, Search, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +10,8 @@ import { LoadingList } from "@/components/Loading";
 import { TopBar } from "@/components/TopBar";
 import { moveEntry } from "@/lib/client/actions";
 import { daysSince } from "@/lib/client/format";
+import { useOffline } from "@/lib/client/offline";
+import { startRadio } from "@/lib/client/radio";
 import { useData, useLoaded } from "@/lib/client/store";
 import { useViews, type SongView } from "@/lib/client/views";
 import { BOARD_STATUSES, INSTRUMENT_LABEL, UP_NEXT_MAX, type Instrument, type Status } from "@/lib/shared/types";
@@ -74,6 +76,7 @@ function Board() {
   const [searchOpen, setSearchOpen] = useState(params.get("search") === "1");
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
+  const videos = useOffline((s) => (s.handheld ? s.videos : null));
 
   // --- filtering -----------------------------------------------------------
   const filtered = useMemo(() => {
@@ -130,6 +133,10 @@ function Board() {
       <TopBar
         brand
         actions={
+          <>
+          <Link href="/listen" className="icon-btn mobile-only" aria-label="Listen">
+            <Headphones />
+          </Link>
           <button
             className="icon-btn"
             aria-label="Search"
@@ -140,6 +147,7 @@ function Board() {
           >
             {searchOpen ? <X /> : <Search />}
           </button>
+          </>
         }
       />
       <Kanban
@@ -192,6 +200,24 @@ function Board() {
           }}
         >
           <X /> Clear
+        </button>
+      )}
+      {filterCount > 0 && filtered.length > 0 && (
+        // Every filter is a playlist: listen to what's left on the board.
+        <button
+          className="chip active"
+          onClick={() =>
+            startRadio(
+              {
+                id: "library-filter",
+                name: [tuning, ...tagIds.map((id) => tags.find((t) => t.id === id)?.name), query && `“${query}”`].filter(Boolean).join(" · ") || "Library filter",
+                entryIds: filtered.map((v) => v.id),
+              },
+              { views: allViews, videos },
+            )
+          }
+        >
+          <Play fill="currentColor" /> Play these
         </button>
       )}
       {tunings.map((t) => (

@@ -113,7 +113,7 @@ export function writePref(key: string, value: unknown) {
 // expanded (full view) or minimized into the mini-player above the bottom nav.
 
 export type PlayerState =
-  | { kind: "resource"; resourceId: string; entryId: string; riffId?: string; expanded: boolean }
+  | { kind: "resource"; resourceId: string; entryId: string; riffId?: string; start?: number; expanded: boolean }
   | { kind: "jam"; trackId: string; expanded: boolean };
 
 let player: PlayerState | null = null;
@@ -128,8 +128,11 @@ export function playJam(trackId: string) {
   emitPlayer();
 }
 
-export function playVideo(resourceId: string, entryId: string, riffId?: string) {
-  player = { kind: "resource", resourceId, entryId, riffId, expanded: true };
+export function playVideo(resourceId: string, entryId: string, riffId?: string, opts: { start?: number; keepView?: boolean } = {}) {
+  const { start } = opts;
+  // The radio moves on to the next song without popping the player open again.
+  const expanded = opts.keepView && player ? player.expanded : true;
+  player = { kind: "resource", resourceId, entryId, riffId, start, expanded };
   // The mini-player replaces the "played it?" dock for this song.
   if (active === entryId) setActiveSong(null);
   emitPlayer();
