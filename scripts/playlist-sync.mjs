@@ -120,7 +120,8 @@ function playlist() {
 
 async function listNew(outFile) {
   const [videos, snap] = await Promise.all([Promise.resolve().then(playlist), api("/api/snapshot")]);
-  const known = new Set(snap.resources.filter((r) => r.provider === "youtube").map((r) => r.externalId));
+  // Videos taken from the playlist before stay handled even if their song was deleted since.
+  const known = new Set([...seenIds(snap), ...snap.resources.filter((r) => r.provider === "youtube").map((r) => r.externalId)]);
   const songs = new Map(snap.songs.map((s) => [s.id, s]));
   const result = {
     newVideos: videos.filter((v) => !known.has(v.id)),
@@ -137,6 +138,9 @@ async function listNew(outFile) {
   else console.log(json);
   console.error(`${videos.length} videos in the playlist, ${result.newVideos.length} not in TuneDeck yet.`);
 }
+
+/** Playlist videos already handled (shared with the desktop app's sync button). */
+const seenIds = (snap) => (Array.isArray(snap.settings?.playlistSeen) ? snap.settings.playlistSeen : []);
 
 const norm = (s) =>
   (s ?? "")
@@ -199,6 +203,8 @@ async function apply(planFile) {
     }
   }
 
+  const seen = [...new Set([...seenIds(snap), ...plan.flatMap((item) => item.videos.map((v) => v.id))])];
+  ops.push({ t: "setting.set", key: "playlistSeen", value: seen });
   for (let i = 0; i < ops.length; i += 400) {
     await api("/api/ops", { method: "POST", body: JSON.stringify({ ops: ops.slice(i, i + 400) }) });
   }

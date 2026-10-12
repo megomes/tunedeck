@@ -4,7 +4,8 @@ import { get, set } from "idb-keyval";
 import { useSyncExternalStore } from "react";
 import { transposeFor } from "@/lib/shared/tuning";
 import type { Snapshot } from "@/lib/shared/types";
-import { api, getState } from "./store";
+import { api, getState, sync } from "./store";
+import { toast } from "./ui";
 
 /*
  * Videos on this phone/tablet, fetched from the TuneDeck desktop app (desktop/) over the
@@ -41,6 +42,14 @@ export interface TransferItem {
 
 export type PcStatus = "idle" | "looking" | "connecting" | "connected" | "unreachable";
 
+export interface PlaylistSync {
+  state: "idle" | "running" | "done" | "error";
+  step?: string;
+  error?: string;
+  songs?: number;
+  videos?: number;
+}
+
 interface OfflineState {
   handheld: boolean;
   loaded: boolean;
@@ -48,6 +57,7 @@ interface OfflineState {
   pcStatus: PcStatus;
   pcName: string | null;
   transfers: TransferItem[];
+  playlist: PlaylistSync;
 }
 
 const CACHE = "td-videos";
@@ -63,6 +73,7 @@ let state: OfflineState = {
   pcStatus: "idle",
   pcName: null,
   transfers: [],
+  playlist: { state: "idle" },
 };
 const listeners = new Set<() => void>();
 
@@ -267,7 +278,9 @@ function disconnect(status: PcStatus = "idle") {
   incoming = null;
   // Anything still in flight will be asked for again on the next connection.
   const transfers = state.transfers.filter((t) => t.state === "saved" || t.state === "error");
-  setState({ pcStatus: status, transfers });
+  const playlist: PlaylistSync =
+    state.playlist.state === "running" ? { state: "error", error: "Lost the connection to the computer" } : state.playlist;
+  setState({ pcStatus: status, transfers, playlist });
 }
 
 /**
@@ -369,6 +382,32 @@ export async function downloadMissing() {
   return true;
 }
 
+/**
+ * Asks the desktop app to read the YouTube playlist and add its new videos to the Backlog
+ * (Claude Code on the computer names the songs), then downloads them all to this device.
+ */
+export async function updatePlaylist(url: string) {
+  if (state.playlist.state === "running") return;
+  if (channel?.readyState !== "open" && !(await findDesktop(true))) return;
+  setState({ playlist: { state: "running", step: "Asking the computer" } });
+  send({ t: "playlist", url });
+}
+
+async function playlistDone(msg: { [k: string]: unknown }) {
+  const songs = Number(msg.songs ?? 0);
+  const videos = Number(msg.videos ?? 0);
+  if (!videos) {
+    setState({ playlist: { state: "done", songs: 0, videos: 0 } });
+    toast("Playlist checked: nothing new");
+    return;
+  }
+  setState({ playlist: { state: "running", step: "Updating the library" } });
+  await sync();
+  setState({ playlist: { state: "done", songs, videos } });
+  toast(songs ? `${songs} new song${songs === 1 ? "" : "s"} in Backlog` : `${videos} video${videos === 1 ? "" : "s"} added to songs you have`);
+  await downloadMissing();
+}
+
 export function clearFinishedTransfers() {
   setState({ transfers: state.transfers.filter((t) => t.state !== "saved" && t.state !== "error") });
 }
@@ -392,6 +431,13 @@ async function onMessage(data: unknown) {
     return;
   }
   switch (msg.t) {
+    case "playlist": {
+      if (state.playlist.state !== "running") return;
+      if (msg.state === "running") setState({ playlist: { state: "running", step: String(msg.step ?? "") } });
+      else if (msg.state === "error") setState({ playlist: { state: "error", error: String(msg.error ?? "Playlist update failed") } });
+      else if (msg.state === "done") await playlistDone(msg);
+      return;
+    }
     case "status": {
       const key = msg.key as string;
       if (state.videos[key]) return;

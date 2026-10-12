@@ -7,7 +7,7 @@ let nextHandle = 1;
 
 contextBridge.exposeInMainWorld("tunedeck", {
   on: (channel, cb) => {
-    if (!["status", "offer", "job"].includes(channel)) return;
+    if (!["status", "offer", "job", "playlist"].includes(channel)) return;
     ipcRenderer.on(channel, (_e, data) => cb(data));
   },
   login: (server, code) => ipcRenderer.invoke("login", { server, code }),
@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("tunedeck", {
   fileInfo: (videoId, semitones) => ipcRenderer.invoke("file-info", { videoId, semitones }),
   openFolder: () => ipcRenderer.invoke("open-folder"),
   recheckTools: () => ipcRenderer.invoke("recheck-tools"),
+  syncPlaylist: (url) => ipcRenderer.invoke("playlist-sync", { url }),
   retry: (videoId) => ipcRenderer.invoke("retry", videoId),
   setOpenAtLogin: (on) => ipcRenderer.invoke("set-open-at-login", on),
 

@@ -115,6 +115,7 @@ function render() {
         tool("yt-dlp", t.ytdlp, "Install with: pip install -U yt-dlp"),
         tool("ffmpeg", t.ffmpeg, "Install with: winget install Gyan.FFmpeg"),
         tool("Rubber Band (tuning)", t.rubberband ? "ok" : null, "Needs an ffmpeg “full” build, e.g. winget install Gyan.FFmpeg"),
+        tool("Claude Code (playlist names)", t.claude, "Install from claude.com/claude-code and sign in"),
       ].join("");
   $("#autostart").checked = status.openAtLogin;
   $("#server-label").textContent = status.server ? new URL(status.server).host : "";
@@ -217,6 +218,8 @@ function setupChannel(peer, ch) {
         send(peer, { t: "status", key, state: "queued", progress: 0 });
         void prepare(peer, it);
       }
+    } else if (msg.t === "playlist" && typeof msg.url === "string") {
+      void api.syncPlaylist(msg.url).then((r) => send(peer, { t: "playlist", state: r.ok ? "done" : "error", ...r }));
     } else if (msg.t === "saved") {
       peer.saved++;
       peer.wanted.delete(msg.key);
@@ -307,6 +310,11 @@ api.on("job", (job) => {
       send(peer, { t: "status", key: item.key, state, progress: job.progress, error: job.error ?? undefined });
     }
   }
+});
+
+// Playlist sync progress goes to every connected device.
+api.on("playlist", (update) => {
+  for (const peer of peers.values()) send(peer, { t: "playlist", ...update });
 });
 
 api.on("offer", (offer) => void accept(offer));

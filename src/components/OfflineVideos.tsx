@@ -1,8 +1,9 @@
 "use client";
 
-import { Check, HardDriveDownload, LoaderCircle, Monitor, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, HardDriveDownload, ListMusic, LoaderCircle, Monitor, RefreshCw, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { setSetting } from "@/lib/client/actions";
 import { fileSize } from "@/lib/client/format";
 import {
   clearFinishedTransfers,
@@ -10,6 +11,7 @@ import {
   downloadMissing,
   findDesktop,
   missingVideos,
+  updatePlaylist,
   useOffline,
   type TransferItem,
 } from "@/lib/client/offline";
@@ -30,6 +32,22 @@ function useMissing() {
   const data = useData();
   const videos = useOffline((s) => s.videos);
   return useMemo(() => missingVideos(data, videos), [data, videos]);
+}
+
+/** The YouTube playlist of covers to pull into the Backlog (set in Settings). */
+function usePlaylistUrl() {
+  const data = useData();
+  return (data.settings.playlistUrl as string | undefined)?.trim() || null;
+}
+
+function PlaylistButton({ url, disabled }: { url: string; disabled?: boolean }) {
+  const playlist = useOffline((s) => s.playlist);
+  const running = playlist.state === "running";
+  return (
+    <button className="btn btn-surface btn-sm" disabled={disabled || running} onClick={() => void updatePlaylist(url)}>
+      {running ? <LoaderCircle className="spin" /> : <ListMusic />} Playlist
+    </button>
+  );
 }
 
 function summary(transfers: TransferItem[]) {
@@ -63,9 +81,23 @@ export function OfflineBanner() {
   const pcName = useOffline((s) => s.pcName);
   const transfers = useOffline((s) => s.transfers);
   const missing = useMissing();
+  const playlistUrl = usePlaylistUrl();
+  const playlist = useOffline((s) => s.playlist);
   const [dismissed, setDismissed] = useState(false);
 
-  if (!handheld || dismissed) return null;
+  if (!handheld) return null;
+  if (playlist.state === "running") {
+    return (
+      <Link href="/settings#videos" className="offline-banner">
+        <LoaderCircle className="spin" />
+        <span className="grow">
+          <span className="ob-title truncate">Updating the playlist</span>
+          <span className="meta truncate">{playlist.step}</span>
+        </span>
+      </Link>
+    );
+  }
+  if (dismissed) return null;
   const s = summary(transfers);
 
   if (s.active > 0) {
@@ -86,19 +118,24 @@ export function OfflineBanner() {
     );
   }
 
-  if (pcStatus !== "connected" || missing.length === 0) return null;
+  if (pcStatus !== "connected" || (missing.length === 0 && !playlistUrl)) return null;
   return (
     <div className="offline-banner">
       <Monitor />
       <span className="grow">
         <span className="ob-title truncate">{pcName ?? "Your computer"} is on this Wi-Fi</span>
         <span className="meta">
-          {missing.length} video{missing.length === 1 ? "" : "s"} not on this device yet
+          {missing.length
+            ? `${missing.length} video${missing.length === 1 ? "" : "s"} not on this device yet`
+            : "All videos on this device"}
         </span>
       </span>
-      <button className="btn btn-primary btn-sm" onClick={() => void downloadMissing()}>
-        <HardDriveDownload /> Download
-      </button>
+      {playlistUrl && <PlaylistButton url={playlistUrl} />}
+      {missing.length > 0 && (
+        <button className="btn btn-primary btn-sm" onClick={() => void downloadMissing()}>
+          <HardDriveDownload /> Download
+        </button>
+      )}
       <button className="icon-btn sm muted" aria-label="Not now" onClick={() => setDismissed(true)}>
         <X />
       </button>
@@ -115,6 +152,8 @@ export function OfflineVideosSection() {
   const pcName = useOffline((s) => s.pcName);
   const transfers = useOffline((s) => s.transfers);
   const missing = useMissing();
+  const playlistUrl = usePlaylistUrl();
+  const playlist = useOffline((s) => s.playlist);
   const [confirmClear, setConfirmClear] = useState(false);
 
   if (!loaded || !handheld) return null;
@@ -160,6 +199,33 @@ export function OfflineVideosSection() {
             </button>
           )}
         </div>
+
+        <label className="form-grid" style={{ gap: 6 }}>
+          <span className="meta">
+            YouTube playlist of covers: new videos go to Backlog (named by Claude Code on your computer), then download here
+          </span>
+          <div className="row-gap">
+            <input
+              className="input grow"
+              type="url"
+              inputMode="url"
+              placeholder="https://www.youtube.com/playlist?list=…"
+              defaultValue={playlistUrl ?? ""}
+              onBlur={(e) => {
+                const v = e.target.value.trim();
+                if (v !== (playlistUrl ?? "")) setSetting("playlistUrl", v || null);
+              }}
+            />
+            {playlistUrl && <PlaylistButton url={playlistUrl} disabled={pcStatus !== "connected"} />}
+          </div>
+          {playlist.state === "running" && <span className="meta">{playlist.step}…</span>}
+          {playlist.state === "error" && <span className="error-text">{playlist.error}</span>}
+          {playlist.state === "done" && (
+            <span className="meta">
+              {playlist.videos ? `Added ${playlist.songs} new song${playlist.songs === 1 ? "" : "s"} and ${playlist.videos} video${playlist.videos === 1 ? "" : "s"}` : "Nothing new in the playlist"}
+            </span>
+          )}
+        </label>
 
         {transfers.length > 0 && (
           <div className="transfer-list">

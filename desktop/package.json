@@ -1,7 +1,7 @@
 {
   "name": "tunedeck-desktop",
   "productName": "TuneDeck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Downloads your TuneDeck videos and sends them to your phone and tablet over Wi-Fi.",
   "main": "main.js",

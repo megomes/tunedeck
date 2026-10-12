@@ -56,7 +56,7 @@ const status = {
   online: false,
   server: DEFAULT_SERVER,
   error: null,
-  tools: { ytdlp: null, ffmpeg: null, rubberband: false, checked: false },
+  tools: { ytdlp: null, ffmpeg: null, rubberband: false, claude: null, checked: false },
   library: { count: 0, bytes: 0, dir: "" },
   jobs: [],
   openAtLogin: false,
@@ -247,10 +247,11 @@ function run(cmd, args) {
 }
 
 async function checkTools() {
-  const [y, f, filters] = await Promise.all([
+  const [y, f, filters, c] = await Promise.all([
     run("yt-dlp", ["--version"]),
     run("ffmpeg", ["-hide_banner", "-version"]),
     run("ffmpeg", ["-hide_banner", "-filters"]),
+    run("claude", ["--version"]),
   ]);
   status.tools = {
     ytdlp: y.ok ? y.stdout.trim() : null,
@@ -557,6 +558,194 @@ async function transpose(job, original, semitones) {
   );
   fs.renameSync(tmp, dest);
 }
+
+// ---------- Playlist sync ----------
+// A phone asks for it: read a YouTube playlist of covers, let Claude Code (installed on this PC)
+// turn the new videos' titles into songs, and add them to the Backlog through the server API.
+
+let playlistRun = null;
+
+function sendPlaylist(update) {
+  win?.webContents.send("playlist", update);
+}
+
+/** Runs a command with text on stdin and returns stdout. */
+function runWithInput(cmd, args, input, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { windowsHide: true, cwd: os.tmpdir() });
+    let out = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`${cmd} took too long`));
+    }, timeoutMs);
+    child.stdout.on("data", (b) => (out += b));
+    child.stderr.on("data", (b) => (err += b));
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e.code === "ENOENT" ? new Error(`${cmd} was not found on this computer`) : e);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      code === 0 ? resolve(out) : reject(new Error(errorFrom(err || out) || `${cmd} exited with ${code}`));
+    });
+    child.stdin.end(input);
+  });
+}
+
+async function playlistVideos(url) {
+  const r = await run("yt-dlp", ["--flat-playlist", "-J", "--no-warnings", url]);
+  if (!r.ok) {
+    const why = errorFrom(r.stderr);
+    throw new Error(/does not exist/i.test(why) ? "Can't read the playlist: make it Unlisted or Public on YouTube" : why || "yt-dlp failed");
+  }
+  const seen = new Set();
+  const videos = [];
+  for (const e of JSON.parse(r.stdout).entries ?? []) {
+    if (!e?.id || seen.has(e.id) || /^\[(private|deleted) video\]$/i.test(e.title ?? "")) continue;
+    seen.add(e.id);
+    videos.push({ id: e.id, title: e.title ?? e.id, channel: e.channel ?? e.uploader ?? null, duration: e.duration ?? null });
+  }
+  return videos;
+}
+
+const PLAN_SCHEMA = JSON.stringify({
+  type: "object",
+  properties: {
+    songs: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          artist: { type: "string" },
+          entryId: { type: ["string", "null"] },
+          videos: { type: "array", items: { type: "string" } },
+        },
+        required: ["title", "artist", "videos"],
+      },
+    },
+  },
+  required: ["songs"],
+});
+
+/** Asks Claude Code to name the songs: title + original artist, videos of one song grouped. */
+async function namePlaylistVideos(videos, existing) {
+  const prompt = [
+    "These YouTube videos come from a playlist of guitar covers of songs I want to learn. Turn them into songs for my repertoire app.",
+    "- Clean names: only the song title and the original artist, properly capitalized. Drop words like Guitar Cover, Tab, Lesson, Solo, Riff, Improv, BEST VERSION, channel names, emojis.",
+    "- Videos of the same song (full cover, solo only, riff, lesson) go in ONE song.",
+    "- If a song is already in my library (list below), set entryId to its id. Otherwise entryId is null.",
+    "- A cover of a famous version keeps the artist named in the video (Little Wing by Stevie Ray Vaughan stays SRV).",
+    "- Improvs or the guitarist's own pieces: a short title like \"Slow Blues in C Minor (Improv)\" and the guitarist (channel) as artist.",
+    "- Every video id must appear in exactly one song.",
+    "",
+    "Videos (id | channel | title):",
+    ...videos.map((v) => `${v.id} | ${v.channel ?? ""} | ${v.title}`),
+    "",
+    "Songs already in my library (entryId | artist | title):",
+    ...existing.map((s) => `${s.entryId} | ${s.artist} | ${s.title}`),
+  ].join("\n");
+  const out = await runWithInput(
+    "claude",
+    ["-p", "--model", "sonnet", "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--output-format", "json", "--json-schema", PLAN_SCHEMA],
+    prompt,
+    5 * 60_000,
+  );
+  const result = JSON.parse(out);
+  if (result.is_error) throw new Error(`Claude Code: ${String(result.result ?? "failed").slice(0, 200)}`);
+  const songs = result.structured_output?.songs;
+  if (!Array.isArray(songs)) throw new Error("Claude Code did not return the songs");
+  // Anything Claude skipped still gets in, under its video title, to be renamed by hand.
+  const placed = new Set(songs.flatMap((s) => s.videos));
+  for (const v of videos) if (!placed.has(v.id)) songs.push({ title: v.title, artist: v.channel ?? "", entryId: null, videos: [v.id] });
+  return songs;
+}
+
+async function syncPlaylist(url) {
+  if (!config.token) throw new Error("The computer is signed out of TuneDeck");
+  sendPlaylist({ state: "running", step: "Reading the playlist" });
+  const [videos, snapRes] = await Promise.all([playlistVideos(url), apiFetch("/api/snapshot")]);
+  if (!snapRes.ok) throw new Error(`Server error (${snapRes.status})`);
+  const snap = await snapRes.json();
+  // Videos taken from the playlist before stay handled even if their song was deleted since.
+  const seen = Array.isArray(snap.settings?.playlistSeen) ? snap.settings.playlistSeen : [];
+  const known = new Set([...seen, ...snap.resources.filter((r) => r.provider === "youtube").map((r) => r.externalId)]);
+  const fresh = videos.filter((v) => !known.has(v.id));
+  const markSeen = { t: "setting.set", key: "playlistSeen", value: [...new Set([...seen, ...videos.map((v) => v.id)])] };
+  if (!fresh.length) {
+    if (markSeen.value.length !== seen.length) await apiFetch("/api/ops", { method: "POST", body: JSON.stringify({ ops: [markSeen] }) });
+    return { songs: 0, videos: 0, names: [] };
+  }
+
+  sendPlaylist({ state: "running", step: `Naming ${fresh.length} new video${fresh.length === 1 ? "" : "s"} with Claude` });
+  const songTitles = new Map(snap.songs.map((s) => [s.id, s]));
+  const existing = snap.entries
+    .filter((e) => e.instrument === "guitar")
+    .map((e) => ({ entryId: e.id, title: songTitles.get(e.songId)?.title ?? "", artist: songTitles.get(e.songId)?.artist ?? "" }));
+  const plan = await namePlaylistVideos(fresh, existing);
+
+  sendPlaylist({ state: "running", step: "Adding to the Backlog" });
+  const byId = new Map(fresh.map((v) => [v.id, v]));
+  const now = new Date().toISOString();
+  const resources = [...snap.resources];
+  const ops = [];
+  const names = [];
+  let top = Math.min(0, ...snap.entries.filter((e) => e.status === "BACKLOG").map((e) => e.position)) - plan.length;
+  let created = 0;
+  let added = 0;
+  for (const song of plan) {
+    let entry = song.entryId ? snap.entries.find((e) => e.id === song.entryId) : null;
+    if (!entry) {
+      const songId = crypto.randomUUID();
+      ops.push({
+        t: "song.upsert",
+        song: { id: songId, title: song.title.trim(), artist: song.artist.trim(), album: null, genre: null, bpm: null, createdAt: now, updatedAt: now },
+      });
+      entry = {
+        id: crypto.randomUUID(), songId, instrument: "guitar", status: "BACKLOG", tuning: null, capo: null, difficulty: null,
+        songsterrUrl: null, playCount: 0, lastPlayedAt: null, isFavorite: false, riffOnly: false, position: top++,
+        createdAt: now, updatedAt: now,
+      };
+      ops.push({ t: "entry.upsert", entry });
+      names.push(`${song.title} (${song.artist})`);
+      created++;
+    }
+    for (const id of song.videos) {
+      const v = byId.get(id);
+      if (!v || resources.some((r) => r.repertoireEntryId === entry.id && r.externalId === id)) continue;
+      const same = resources.filter((r) => r.repertoireEntryId === entry.id && r.type === "guitar_cover");
+      const resource = {
+        id: crypto.randomUUID(), repertoireEntryId: entry.id, type: "guitar_cover", customLabel: null, provider: "youtube",
+        url: `https://www.youtube.com/watch?v=${id}`, externalId: id, title: v.title, author: v.channel,
+        thumbnailUrl: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`, durationSeconds: v.duration,
+        metaStatus: v.duration != null ? "ok" : "pending", isPrimary: same.length === 0,
+        sortOrder: same.reduce((m, r) => Math.max(m, r.sortOrder + 1), 0), createdAt: now, updatedAt: now,
+      };
+      resources.push(resource);
+      ops.push({ t: "resource.upsert", resource });
+      added++;
+    }
+  }
+  ops.push(markSeen);
+  for (let i = 0; i < ops.length; i += 400) {
+    const res = await apiFetch("/api/ops", { method: "POST", body: JSON.stringify({ ops: ops.slice(i, i + 400) }) });
+    if (!res.ok) throw new Error(`Server error (${res.status})`);
+  }
+  return { songs: created, videos: added, names };
+}
+
+/** One sync at a time: a second request while one runs waits for the same result. */
+ipcMain.handle("playlist-sync", async (_e, { url }) => {
+  if (typeof url !== "string" || !/^https:\/\/(www\.|m\.)?youtube\.com\/playlist\?list=[\w-]+/.test(url)) {
+    return { ok: false, error: "Not a YouTube playlist link" };
+  }
+  playlistRun ??= syncPlaylist(url)
+    .then((result) => ({ ok: true, ...result }))
+    .catch((err) => ({ ok: false, error: String(err.message ?? err).slice(0, 300) }))
+    .finally(() => (playlistRun = null));
+  return playlistRun;
+});
 
 ipcMain.handle("retry", (_e, videoId) => {
   const job = jobs.get(videoId);
