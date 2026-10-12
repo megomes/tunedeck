@@ -36,6 +36,7 @@ function paint() {
 
 function render() {
   if (!status) return;
+  $("#version").textContent = status.version ? `v${status.version}` : "";
   const pill = $("#pill");
   pill.textContent = !status.signedIn ? "Signed out" : status.online ? "Online" : "Offline";
   pill.className = `pill ${status.signedIn && status.online ? "ok" : "off"}`;

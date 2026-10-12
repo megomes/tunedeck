@@ -63,6 +63,7 @@ const status = {
 };
 
 function push() {
+  status.version = app.getVersion();
   status.server = config.server;
   status.name = config.name;
   status.signedIn = Boolean(config.token);
