@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { jamPlayed, openLink, openResource, openSongsterr, placeSameRecording, playedOnce } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
 import { useLocalVariants } from "@/lib/client/offline";
-import { detachRadio, radioNext, radioPrev, stopRadio, useRadio } from "@/lib/client/radio";
+import { detachRadio, getRadio, radioNext, radioPrev, stopRadio, useRadio, youtubeStoppedWhenLocked } from "@/lib/client/radio";
 import { useData } from "@/lib/client/store";
 import { closePlayer, playVideo, readPref, setPlayerExpanded, toast, usePlayer, writePref } from "@/lib/client/ui";
 import { newTake, sample, thresholdFor, type Take } from "@/lib/client/takes";
@@ -457,6 +457,31 @@ export function Player() {
     const id = setTimeout(() => void radioNext("error"), 2500);
     return () => clearTimeout(id);
   }, [onAir, error, radio?.seq]);
+  // Screen locked on a YouTube song: with Premium it may play on. If it stops instead, go to the
+  // next song saved on the phone (those always play locked) and skip YouTube while locked from then on.
+  useEffect(() => {
+    if (!onAir || native || !radio) return;
+    const seq = radio.seq;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      clearTimeout(timer);
+      // Paused before locking: that was you, not YouTube.
+      if (document.visibilityState !== "hidden" || (!engine.current?.playing() && performance.now() - trackStart.current > 2500)) return;
+      timer = setTimeout(() => {
+        if (document.visibilityState !== "hidden" || engine.current?.playing()) return;
+        if (!getRadio()?.tracks.some((t) => t.local)) return;
+        youtubeStoppedWhenLocked();
+        void radioNext("error", seq);
+      }, 8000);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", arm);
+    };
+  }, [onAir, native, radio?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // The same video again (a one-song queue going round): start it over.
   const lastResource = useRef<string | null>(null);
   useEffect(() => {

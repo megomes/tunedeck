@@ -72,8 +72,8 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   keeps the screen on; steering-wheel/headphone next and previous work. "Play these" on the Library plays
   the current filter. Listening never counts as a +1. Songs saved on the phone keep playing with the
   screen locked: the radio plays them through one shared `<audio>` (`src/lib/client/backgroundAudio.ts`)
-  and the video only follows it on screen, paused while the screen is off. YouTube can't play in the
-  background, so with the screen locked the radio jumps to the next saved song.
+  and the video only follows it on screen, paused while the screen is off. A YouTube song may play on
+  locked (Premium); once one is seen stopping there, a locked screen jumps to the next saved song.
 - **Sideways = full screen.** Turning a phone sideways with the player open fills the screen with the video
   (YouTube or saved), radio and car mode included; turning it back brings the controls back.
 - **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)

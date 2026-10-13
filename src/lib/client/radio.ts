@@ -489,16 +489,25 @@ export function radioPrev() {
 let advancing = false;
 
 /**
+ * The YouTube player was seen stopping with the screen locked (it plays on only with Premium, and
+ * not always in an embed): from then on a locked screen means saved songs only.
+ */
+let youtubeStopsWhenLocked = false;
+export function youtubeStoppedWhenLocked() {
+  youtubeStopsWhenLocked = true;
+}
+
+/**
  * Next song. At the end of a song (not a skip) it counts a listen and, with the DJ on, says
  * what's coming first. At the end of the queue it starts over reshuffled, unless the trip is over.
- * With the screen locked it goes to the next song saved on the phone: YouTube can't play then.
+ * With the screen locked, once YouTube was seen stopping there, it goes to the next saved song.
  * `seq` is the track that ended: a late second report of the same end is ignored.
  */
 export async function radioNext(reason: "end" | "skip" | "error" = "skip", seq?: number) {
   if (!radio || advancing || (seq != null && seq !== radio.seq)) return;
   const cur = radio.tracks[radio.index];
   if (reason === "end" && radio.mode === "full") countListen(cur.entryId);
-  const locked = document.visibilityState === "hidden" && radio.tracks.some((t) => t.local);
+  const locked = youtubeStopsWhenLocked && document.visibilityState === "hidden" && radio.tracks.some((t) => t.local);
   const canPlay = (t: Track) => !locked || t.local;
   const after = radio.tracks.findIndex((t, i) => i > radio!.index && canPlay(t));
   let next: RadioState;
