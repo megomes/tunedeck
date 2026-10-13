@@ -74,6 +74,10 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   screen locked: the radio plays them through one shared `<audio>` (`src/lib/client/backgroundAudio.ts`)
   and the video only follows it on screen, paused while the screen is off. A YouTube song may play on
   locked (Premium); once one is seen stopping there, a locked screen jumps to the next saved song.
+  "Play in YouTube Music" hands any playlist (or the rest of the radio's queue) to YouTube Music instead,
+  which shows up in Android Auto's media card: `POST /api/ytmusic` turns the video ids into YouTube's
+  temporary `TLGG…` playlist (`watch_videos`, max 50) and opens it on music.youtube.com, falling back to
+  plain YouTube.
 - **Sideways = full screen.** Turning a phone sideways with the player open fills the screen with the video
   (YouTube or saved), radio and car mode included; turning it back brings the controls back.
 - **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)

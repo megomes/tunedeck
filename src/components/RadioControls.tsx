@@ -1,10 +1,10 @@
 "use client";
 
-import { Car, ChevronDown, Heart, ListMusic, ListPlus, Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
+import { Car, ChevronDown, Heart, ListMusic, ListPlus, MonitorPlay, Pause, Play, SkipBack, SkipForward, X } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { addToUpNext, toggleFavorite } from "@/lib/client/actions";
 import { duration } from "@/lib/client/format";
-import { MODE_LABEL, radioJump, radioNext, radioPrev, setCarMode, stopRadio, type RadioState } from "@/lib/client/radio";
+import { MODE_LABEL, radioJump, radioNext, radioPrev, radioToYouTubeMusic, setCarMode, stopRadio, type RadioState } from "@/lib/client/radio";
 import { setPlayerExpanded } from "@/lib/client/ui";
 import { useViews, type SongView } from "@/lib/client/views";
 import { STATUS_LABEL } from "@/lib/shared/types";
@@ -125,6 +125,9 @@ export function RadioPanel({ radio, view, engine }: { radio: RadioState; view: S
         </button>
         <button className="chip sm" onClick={() => setCarMode(true)}>
           <Car /> Car mode
+        </button>
+        <button className="chip sm" onClick={radioToYouTubeMusic} title="The rest of the queue plays in YouTube Music (Android Auto)">
+          <MonitorPlay /> YouTube Music
         </button>
         <button className="chip sm" onClick={stopRadio} style={{ marginLeft: "auto" }}>
           <X /> Stop

@@ -26,6 +26,8 @@ export interface RadioPrefs {
   trip: number;
   /** Only songs saved on this phone: no mobile data in the car. */
   savedOnly: boolean;
+  /** Playlists open in YouTube Music instead: it shows up in Android Auto. */
+  ytMusic: boolean;
 }
 
 export const VERSION_LABEL: Record<Version, string> = { original: "Original", cover: "Covers", backing: "Backing tracks" };
@@ -34,7 +36,7 @@ export const TRIP_OPTIONS = [0, 15, 30, 45, 60, 90];
 /** How long each song plays in Best parts. */
 export const HIGHLIGHT_SECONDS = 35;
 
-const DEFAULT_PREFS: RadioPrefs = { version: "original", mode: "full", shuffle: true, dj: false, trip: 0, savedOnly: false };
+const DEFAULT_PREFS: RadioPrefs = { version: "original", mode: "full", shuffle: true, dj: false, trip: 0, savedOnly: false, ytMusic: false };
 
 let prefs: RadioPrefs | null = null;
 const prefListeners = new Set<() => void>();
@@ -327,6 +329,7 @@ export function buildPlaylists(views: SongView[], data: Snapshot, listens: Liste
 export interface Track {
   entryId: string;
   resourceId: string;
+  videoId: string;
   /** Where it starts (Best parts), in seconds. */
   start?: number;
   /** Where it stops (Best parts). */
@@ -392,7 +395,7 @@ function buildTracks(entryIds: string[], mode: RadioMode, p: RadioPrefs, first?:
     const r = trackResource(v, p.version, ctx.videos, p.savedOnly);
     if (!r) continue;
     const local = !!ctx.videos?.[videoKey(r.externalId!, 0)];
-    const t: Track = { entryId: id, resourceId: r.id, seconds: r.durationSeconds, local };
+    const t: Track = { entryId: id, resourceId: r.id, videoId: r.externalId!, seconds: r.durationSeconds, local };
     if (mode === "highlights") {
       const star = v.entry.stars?.[r.id];
       const start = r.durationSeconds ? clipStarts(r.durationSeconds, star, HIGHLIGHT_SECONDS)[0] : (star ?? 30);
@@ -552,6 +555,53 @@ export function detachRadio() {
   if (!radio) return;
   radio = null;
   emit();
+}
+
+// ---------- YouTube Music ----------
+// A web app can't show up in Android Auto's media card next to the map; YouTube Music can. The
+// playlist is handed over there: same order, version and drive timer, full songs.
+
+/** Most videos YouTube puts in one temporary playlist. */
+const YT_MUSIC_MAX = 50;
+
+async function openYouTubeMusic(videoIds: string[]) {
+  const ids = videoIds.slice(0, YT_MUSIC_MAX);
+  // TuneDeck goes quiet: the music moves to the other app.
+  if (radio) stopRadio();
+  else closePlayer();
+  toast("Opening YouTube Music…");
+  // Plain YouTube when YouTube Music's link can't be made.
+  let url = `https://www.youtube.com/watch_videos?video_ids=${ids.join(",")}`;
+  try {
+    const res = await fetch("/api/ytmusic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (res.ok) url = (await res.json()).url;
+  } catch {
+    /* offline: plain YouTube */
+  }
+  // Still within the tap's activation: Android hands the link to the app.
+  if (!window.open(url, "_blank")) window.location.href = url;
+}
+
+/** Plays a playlist in YouTube Music instead of here. */
+export function playInYouTubeMusic(playlist: Pick<Playlist, "entryIds">, env: typeof ctx) {
+  ctx = env;
+  const tracks = buildTracks(playlist.entryIds, "full", { ...loadPrefs(), savedOnly: false });
+  if (!tracks.length) {
+    toast("None of these songs has a YouTube video to play");
+    return false;
+  }
+  if (tracks.length > YT_MUSIC_MAX) toast(`YouTube Music takes the first ${YT_MUSIC_MAX} songs`);
+  void openYouTubeMusic(tracks.map((t) => t.videoId));
+  return true;
+}
+
+/** The rest of the radio's queue, from the song playing now, moves to YouTube Music. */
+export function radioToYouTubeMusic() {
+  if (radio) void openYouTubeMusic(radio.tracks.slice(radio.index).map((t) => t.videoId));
 }
 
 export function setCarMode(car: boolean) {

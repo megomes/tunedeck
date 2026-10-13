@@ -10,6 +10,7 @@ import {
   Heart,
   History,
   Mic2,
+  MonitorPlay,
   Play,
   Repeat,
   Shuffle,
@@ -31,6 +32,7 @@ import {
   VERSION_LABEL,
   buildPlaylists,
   playableCount,
+  playInYouTubeMusic,
   readListens,
   setRadioPrefs,
   startRadio,
@@ -111,9 +113,12 @@ export default function ListenPage() {
     }),
     [views],
   );
-  const all = playableCount(everything.entryIds, views, videos, prefs);
+  // YouTube Music plays full songs and needs no saved copy.
+  const counted = prefs.ytMusic ? { ...prefs, savedOnly: false, mode: "full" as const } : prefs;
+  const all = playableCount(everything.entryIds, views, videos, counted);
 
-  const start = (list: Playlist, car?: boolean) => startRadio(list, { views, videos }, { car });
+  const start = (list: Playlist, car?: boolean) =>
+    prefs.ytMusic ? playInYouTubeMusic(list, { views, videos }) : startRadio(list, { views, videos }, { car });
 
   if (!loaded) {
     return (
@@ -174,7 +179,14 @@ export default function ListenPage() {
             >
               <Mic2 /> DJ voice
             </button>
-            {handheld && (
+            <button
+              className={`chip sm ${prefs.ytMusic ? "active" : ""}`}
+              onClick={() => setRadioPrefs({ ytMusic: !prefs.ytMusic })}
+              title="Opens the playlist in YouTube Music, which shows up in Android Auto"
+            >
+              <MonitorPlay /> Play in YouTube Music
+            </button>
+            {handheld && !prefs.ytMusic && (
               <button className={`chip sm ${prefs.savedOnly ? "active" : ""}`} onClick={() => setRadioPrefs({ savedOnly: !prefs.savedOnly })}>
                 <Wifi /> No data: saved only
               </button>
@@ -188,11 +200,13 @@ export default function ListenPage() {
             ))}
           </div>
           <p className="meta listen-hint">
-            {prefs.mode === "highlights"
-              ? "Best parts: each song plays from its ⭐ (or past the intro) for 35 seconds."
-              : prefs.trip
-                ? "The queue is cut to fit the drive, so the music ends when you arrive."
-                : "Listening doesn't count as a +1: that's only for when you play."}
+            {prefs.ytMusic
+              ? "Playlists open in YouTube Music (up to 50 songs, full songs): it shows up in Android Auto next to the map and keeps playing locked with Premium."
+              : prefs.mode === "highlights"
+                ? "Best parts: each song plays from its ⭐ (or past the intro) for 35 seconds."
+                : prefs.trip
+                  ? "The queue is cut to fit the drive, so the music ends when you arrive."
+                  : "Listening doesn't count as a +1: that's only for when you play."}
           </p>
         </div>
 
@@ -203,7 +217,7 @@ export default function ListenPage() {
             </div>
             <div className="carousel compact">
               {sec.lists.map((list) => {
-                const { n, seconds } = playableCount(list.entryIds, views, videos, prefs, list.mode);
+                const { n, seconds } = playableCount(list.entryIds, views, videos, counted, prefs.ytMusic ? "full" : list.mode);
                 const playing = radio?.playlist.id === list.id;
                 return (
                   <button
