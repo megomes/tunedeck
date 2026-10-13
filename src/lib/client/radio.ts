@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { STATUS_LABEL, type Resource, type ResourceType, type Snapshot, type Status } from "@/lib/shared/types";
 import { clipStarts } from "./backlog";
+import { unlockAudio } from "./backgroundAudio";
 import { daysSince } from "./format";
 import { videoKey, type LocalVideo } from "./offline";
 import { closePlayer, playVideo, readPref, toast, writePref } from "./ui";
@@ -332,6 +333,8 @@ export interface Track {
   end?: number;
   /** Video length when known, for the trip timer. */
   seconds: number | null;
+  /** Saved on this phone: the only songs that keep playing with the screen locked. */
+  local: boolean;
 }
 
 export interface RadioState {
@@ -388,7 +391,8 @@ function buildTracks(entryIds: string[], mode: RadioMode, p: RadioPrefs, first?:
     if (!v) continue;
     const r = trackResource(v, p.version, ctx.videos, p.savedOnly);
     if (!r) continue;
-    const t: Track = { entryId: id, resourceId: r.id, seconds: r.durationSeconds };
+    const local = !!ctx.videos?.[videoKey(r.externalId!, 0)];
+    const t: Track = { entryId: id, resourceId: r.id, seconds: r.durationSeconds, local };
     if (mode === "highlights") {
       const star = v.entry.stars?.[r.id];
       const start = r.durationSeconds ? clipStarts(r.durationSeconds, star, HIGHLIGHT_SECONDS)[0] : (star ?? 30);
@@ -455,6 +459,8 @@ export function startRadio(
     toast(p.savedOnly ? "None of these songs is saved on this device" : "None of these songs has a YouTube video to play");
     return false;
   }
+  // Inside the tap: later songs may then start on their own, even with the screen locked.
+  unlockAudio();
   stopSpeaking();
   play({
     playlist,
@@ -471,6 +477,7 @@ export function startRadio(
 /** Goes to a track of the queue. */
 export function radioJump(index: number) {
   if (!radio || index < 0 || index >= radio.tracks.length) return;
+  unlockAudio();
   stopSpeaking();
   play({ ...radio, index, seq: radio.seq + 1 });
 }
@@ -484,14 +491,19 @@ let advancing = false;
 /**
  * Next song. At the end of a song (not a skip) it counts a listen and, with the DJ on, says
  * what's coming first. At the end of the queue it starts over reshuffled, unless the trip is over.
+ * With the screen locked it goes to the next song saved on the phone: YouTube can't play then.
+ * `seq` is the track that ended: a late second report of the same end is ignored.
  */
-export async function radioNext(reason: "end" | "skip" | "error" = "skip") {
-  if (!radio || advancing) return;
+export async function radioNext(reason: "end" | "skip" | "error" = "skip", seq?: number) {
+  if (!radio || advancing || (seq != null && seq !== radio.seq)) return;
   const cur = radio.tracks[radio.index];
   if (reason === "end" && radio.mode === "full") countListen(cur.entryId);
+  const locked = document.visibilityState === "hidden" && radio.tracks.some((t) => t.local);
+  const canPlay = (t: Track) => !locked || t.local;
+  const after = radio.tracks.findIndex((t, i) => i > radio!.index && canPlay(t));
   let next: RadioState;
-  if (radio.index + 1 < radio.tracks.length) {
-    next = { ...radio, index: radio.index + 1, seq: radio.seq + 1 };
+  if (after >= 0) {
+    next = { ...radio, index: after, seq: radio.seq + 1 };
   } else if (radio.endsAt) {
     if (reason === "end") {
       const p = loadPrefs();
@@ -505,10 +517,11 @@ export async function radioNext(reason: "end" | "skip" | "error" = "skip") {
     const p = loadPrefs();
     const tracks = buildTracks(radio.playlist.entryIds, radio.mode, p);
     if (!tracks.length) return stopRadio();
-    next = { ...radio, tracks, index: 0, seq: radio.seq + 1 };
+    next = { ...radio, tracks, index: Math.max(0, tracks.findIndex(canPlay)), seq: radio.seq + 1 };
   }
   const p = loadPrefs();
-  if (reason === "end" && p.dj && radio.mode === "full") {
+  // No DJ with the screen locked: the voice can't be counted on to speak (or end) in the background.
+  if (reason === "end" && p.dj && radio.mode === "full" && document.visibilityState === "visible") {
     advancing = true;
     await speak(djLine(cur, next.tracks[next.index]));
     advancing = false;

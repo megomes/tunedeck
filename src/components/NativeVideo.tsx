@@ -3,6 +3,7 @@
 import { Pause, Play, Repeat, RotateCcw, RotateCw, SkipBack } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { claimAudio, releaseAudio, sharedAudio } from "@/lib/client/backgroundAudio";
 import { openLocalVideo } from "@/lib/client/offline";
 import { readPref, writePref } from "@/lib/client/ui";
 
@@ -40,6 +41,9 @@ type Flash = { id: number; kind: "play" | "pause" | "back" | "fwd"; text?: strin
  * switching tuning seeks the other element to the same spot, so there is never a second
  * clock to keep in sync. Gestures: tap = play/pause, double-tap sides = ∓5s (keep tapping
  * for more), drag sideways = scrub.
+ *
+ * `background` (the radio): the sound comes from the shared <audio> instead, so it keeps playing
+ * with the screen locked; the video follows it on screen and stops while the screen is off.
  */
 export function NativeVideo({
   videoId,
@@ -51,6 +55,9 @@ export function NativeVideo({
   title,
   artist,
   onUnavailable,
+  background = false,
+  stopAt,
+  onEnded,
 }: {
   videoId: string;
   variants: Variant[];
@@ -61,6 +68,11 @@ export function NativeVideo({
   title: string;
   artist: string | null;
   onUnavailable: () => void;
+  background?: boolean;
+  /** Where the song stops (the radio's best parts). */
+  stopAt?: number;
+  /** The end (or `stopAt`) was reached. Fires from media events, which keep coming with the screen locked. */
+  onEnded?: () => void;
 }) {
   const [urls, setUrls] = useState<Record<number, string>>({});
   const els = useRef<Record<number, HTMLVideoElement | null>>({});
@@ -78,6 +90,12 @@ export function NativeVideo({
   const [flash, setFlash] = useState<Flash | null>(null);
   const [scrub, setScrub] = useState<{ to: number; delta: number } | null>(null);
   const [switching, setSwitching] = useState(false);
+  // Fixed for the life of the player: the Player remounts it when the radio starts or stops.
+  const [audioMode] = useState(background);
+  const endRef = useRef({ stopAt, onEnded });
+  useEffect(() => {
+    endRef.current = { stopAt, onEnded };
+  });
 
   const variantKey = variants.map((v) => v.semitones).join(",");
 
@@ -113,7 +131,10 @@ export function NativeVideo({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId, variantKey]);
 
-  const cur = useCallback(() => els.current[activeRef.current] ?? null, []);
+  /** The video on screen. */
+  const shown = useCallback(() => els.current[activeRef.current] ?? null, []);
+  /** What plays the sound and keeps the time: the shared audio in background mode, else the video. */
+  const cur = useCallback((): HTMLMediaElement | null => (audioMode ? sharedAudio() : shown()), [audioMode, shown]);
 
   useEffect(() => {
     engineRef.current = {
@@ -135,6 +156,72 @@ export function NativeVideo({
     };
   }, [engineRef, cur]);
 
+  // ---------- Background mode: the shared audio plays, the video follows ----------
+
+  /** Puts the video where the audio is, playing only while the screen is on. */
+  const follow = useCallback(() => {
+    const v = shown();
+    if (!audioMode || !v || v.readyState < 1) return;
+    const a = sharedAudio();
+    if (Math.abs(v.currentTime - a.currentTime) > 0.25) v.currentTime = a.currentTime;
+    v.playbackRate = a.playbackRate;
+    if (!a.paused && document.visibilityState === "visible") void v.play().catch(() => {});
+    else if (!v.paused) v.pause();
+  }, [audioMode, shown]);
+
+  // The audio starts as soon as the file is open: no waiting for the video.
+  useEffect(() => {
+    const url = urls[activeRef.current];
+    if (!audioMode || !url) return;
+    const a = sharedAudio();
+    if (a.src === url) return;
+    a.src = url;
+    a.playbackRate = rate;
+    const begin = () => {
+      if (start) a.currentTime = start;
+      setDuration(a.duration);
+      void a.play().catch(() => setPlaying(false));
+    };
+    a.addEventListener("loadedmetadata", begin, { once: true });
+    return () => a.removeEventListener("loadedmetadata", begin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audioMode, urls]);
+
+  useEffect(() => {
+    if (!audioMode) return;
+    const me = Symbol("player");
+    claimAudio(me);
+    const a = sharedAudio();
+    // Only a song's end counts, not the silent clip that unlocks the element.
+    const ended = () => a.src.startsWith("blob:") && endRef.current.onEnded?.();
+    const on: [string, () => void][] = [
+      ["play", () => (setPlaying(true), follow())],
+      ["pause", () => (setPlaying(false), follow())],
+      ["ended", () => (setPlaying(false), follow(), ended())],
+      ["seeked", follow],
+      ["ratechange", follow],
+      ["durationchange", () => a.duration && setDuration(a.duration)],
+      [
+        "timeupdate",
+        () => {
+          const end = endRef.current.stopAt;
+          if (end != null && a.currentTime >= end) ended();
+        },
+      ],
+    ];
+    on.forEach(([e, h]) => a.addEventListener(e, h));
+    // Screen off: stop decoding the picture (battery, heat); back on: pick it up where the sound is.
+    document.addEventListener("visibilitychange", follow);
+    // Keep the picture in step with the sound.
+    const drift = setInterval(follow, 1000);
+    return () => {
+      on.forEach(([e, h]) => a.removeEventListener(e, h));
+      document.removeEventListener("visibilitychange", follow);
+      clearInterval(drift);
+      releaseAudio(me);
+    };
+  }, [audioMode, follow]);
+
   // Start playing once the first variant is ready.
   const started = useRef(false);
   useEffect(() => {
@@ -142,7 +229,9 @@ export function NativeVideo({
   }, [videoId]);
   const onReady = (semitones: number) => {
     const v = els.current[semitones];
-    if (!v || semitones !== activeRef.current || started.current) return;
+    if (!v || semitones !== activeRef.current) return;
+    if (audioMode) return follow();
+    if (started.current) return;
     started.current = true;
     setDuration(v.duration);
     if (start) v.currentTime = start;
@@ -185,6 +274,28 @@ export function NativeVideo({
 
   async function switchVariant(next: number) {
     if (next === activeRef.current || urls[next] == null || switching) return;
+    if (audioMode) {
+      // Same spot in the other file; the picture switches with it.
+      const a = sharedAudio();
+      const old = shown();
+      const wasPlaying = !a.paused;
+      const t = a.currentTime;
+      setSwitching(true);
+      try {
+        a.src = urls[next];
+        await new Promise((r) => a.addEventListener("loadedmetadata", r, { once: true }));
+        a.currentTime = t;
+        old?.pause();
+        activeRef.current = next;
+        setActive(next);
+        writePref("transpose", next !== 0);
+        if (wasPlaying) await a.play().catch(() => {});
+        follow();
+      } finally {
+        setSwitching(false);
+      }
+      return;
+    }
     const from = cur();
     const to = els.current[next];
     if (!from || !to) return;
@@ -421,6 +532,7 @@ export function NativeVideo({
               onClick={() => {
                 setRate(s);
                 Object.values(els.current).forEach((v) => v && (v.playbackRate = s));
+                if (audioMode) sharedAudio().playbackRate = s;
               }}
             >
               {s === 1 ? "1×" : `${s}×`}
@@ -447,12 +559,16 @@ export function NativeVideo({
             src={urls[v.semitones]}
             playsInline
             preload="auto"
-            muted={active !== v.semitones}
+            muted={audioMode || active !== v.semitones}
             onLoadedMetadata={() => onReady(v.semitones)}
-            onDurationChange={(e) => active === v.semitones && setDuration(e.currentTarget.duration)}
-            onPlay={() => active === v.semitones && setPlaying(true)}
-            onPause={() => active === v.semitones && setPlaying(false)}
-            onEnded={() => active === v.semitones && setPlaying(false)}
+            onDurationChange={(e) => !audioMode && active === v.semitones && setDuration(e.currentTarget.duration)}
+            onPlay={() => !audioMode && active === v.semitones && setPlaying(true)}
+            onPause={() => !audioMode && active === v.semitones && setPlaying(false)}
+            onEnded={() => {
+              if (audioMode || active !== v.semitones) return;
+              setPlaying(false);
+              endRef.current.onEnded?.();
+            }}
           />
         ) : null,
       )}
@@ -501,7 +617,7 @@ export function NativeVideo({
 }
 
 /** Thin progress line along the bottom of the video, visible in every layout (mini player too). */
-function ProgressLine({ getVideo, duration }: { getVideo: () => HTMLVideoElement | null; duration: number }) {
+function ProgressLine({ getVideo, duration }: { getVideo: () => HTMLMediaElement | null; duration: number }) {
   const fill = useRef<HTMLElement>(null);
   useEffect(() => {
     let raf = 0;
@@ -527,7 +643,7 @@ function SeekBar({
   loop,
   onSeek,
 }: {
-  getVideo: () => HTMLVideoElement | null;
+  getVideo: () => HTMLMediaElement | null;
   duration: number;
   loop: { a: number; b: number | null } | null;
   onSeek: (t: number) => void;

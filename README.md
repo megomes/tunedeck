@@ -70,7 +70,12 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   tracks, full songs or just the best part of each, a drive timer that cuts the queue to fit the trip,
   and a DJ voice that says the next song and its tuning. Car mode has huge buttons and swipe-to-skip and
   keeps the screen on; steering-wheel/headphone next and previous work. "Play these" on the Library plays
-  the current filter. Listening never counts as a +1.
+  the current filter. Listening never counts as a +1. Songs saved on the phone keep playing with the
+  screen locked: the radio plays them through one shared `<audio>` (`src/lib/client/backgroundAudio.ts`)
+  and the video only follows it on screen, paused while the screen is off. YouTube can't play in the
+  background, so with the screen locked the radio jumps to the next saved song.
+- **Sideways = full screen.** Turning a phone sideways with the player open fills the screen with the video
+  (YouTube or saved), radio and car mode included; turning it back brings the controls back.
 - **Embedded YouTube.** YouTube resources play inside the app (IFrame Player API, `src/components/Player.tsx`)
   and minimize into a mini-player that keeps playing while you navigate. Songsterr links are a direct
   redirect so the OS can hand them to the Songsterr app.

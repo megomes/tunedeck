@@ -447,7 +447,7 @@ export function Player() {
       const t = p.time();
       const d = p.duration();
       const end = r.tracks[r.index]?.end;
-      if ((end != null && t >= end) || (d > 0 && t >= d - 0.8 && !p.playing())) void radioNext("end");
+      if ((end != null && t >= end) || (d > 0 && t >= d - 0.8 && !p.playing())) void radioNext("end", r.seq);
     }, 400);
     return () => clearInterval(id);
   }, [onAir, radio]);
@@ -545,7 +545,8 @@ export function Player() {
       <div className="player-stage">
         {native && media.videoId ? (
           <NativeVideo
-            key={media.key}
+            // The radio plays through the shared audio: starting or leaving it remounts the player.
+            key={`${media.key}${onAir ? ":radio" : ""}`}
             videoId={media.videoId}
             variants={variants}
             start={requestedStart ?? startSeconds(media.url)}
@@ -555,6 +556,9 @@ export function Player() {
             title={media.miniTitle}
             artist={view?.song.artist ?? media.author}
             onUnavailable={onNativeUnavailable}
+            background={onAir}
+            stopAt={onAir ? track?.end : undefined}
+            onEnded={onAir ? () => void radioNext("end", radio!.seq) : undefined}
           />
         ) : (
           <div className="player-video" ref={wrap} />

@@ -3487,7 +3487,7 @@ button.fact:hover {
 
 /* Tablet in landscape: the video takes the screen and the left column (where the app's
    sidebar was) holds the controls, so they are always in reach without scrolling. */
-@media (min-width: 900px) and (orientation: landscape) {
+@media (min-width: 900px) and (min-height: 541px) and (orientation: landscape) {
   .player.expanded.native {
     left: 0;
     display: grid;
@@ -5436,4 +5436,30 @@ a.playnow:hover {
 }
 .car-btn.side.liked {
   color: var(--accent);
+}
+
+/* ---------- Phone turned sideways: the video takes the whole screen ---------- */
+/* Everything else hides until the phone is turned back (radio and car mode included). */
+@media (orientation: landscape) and (max-height: 540px) {
+  .player.expanded {
+    left: 0;
+    padding: 0;
+    overflow: hidden;
+    background: #000;
+  }
+  .player.expanded .player-head,
+  .player.expanded .player-body,
+  .player.expanded .car {
+    display: none;
+  }
+  .player.expanded .player-stage,
+  .player.expanded.car-mode .player-stage {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    margin: 0;
+    border-radius: 0;
+  }
 }
