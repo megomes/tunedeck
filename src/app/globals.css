@@ -3796,6 +3796,61 @@ button.fact:hover {
   margin: -4px 0 0;
   text-align: center;
 }
+.riff-keys {
+  margin: -2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+.riff-keys span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.riff-keys kbd {
+  font-family: inherit;
+  font-size: 11px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--background-secondary);
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+@media (hover: none) and (pointer: coarse) {
+  .riff-keys {
+    display: none;
+  }
+}
+/* What a keyboard shortcut just did, over the video. */
+.key-flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  animation: key-flash 0.7s ease-out forwards;
+}
+@keyframes key-flash {
+  0%, 60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 .riff-adjust {
   display: flex;
   flex-direction: column;

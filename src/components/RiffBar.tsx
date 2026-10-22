@@ -197,7 +197,7 @@ export function RiffBar({
     mainHint = pendingSource ? `One tap at its start: the end comes from ${label(pendingSource)}` : "Tap where it starts, then where it ends";
   } else {
     mainLabel = "Mark a riff";
-    mainHint = riffs.length ? null : "Tap where the riff starts, then where it ends. It loops right away";
+    mainHint = null;
   }
 
   const d = clock.d || 1;
@@ -360,7 +360,7 @@ export function RiffBar({
           <span className="truncate">{mainLabel}</span>
         </button>
       </div>
-      {mainHint && <p className="meta riff-hint">{mainHint}</p>}
+      {mainHint ? <p className="meta riff-hint">{mainHint}</p> : <Shortcuts />}
 
       {selected && (
         <div className="riff-adjust" style={{ ["--rc" as string]: riffColor(selected) }}>
@@ -427,5 +427,33 @@ export function RiffBar({
         </div>
       )}
     </div>
+  );
+}
+
+const SHORTCUTS: [string[], string][] = [
+  [["Space", "K"], "play / pause"],
+  [["J", "L"], "∓10s"],
+  [["←", "→"], "∓5s"],
+  [[",", "."], "∓1s"],
+  [["<", ">"], "speed"],
+  [["0–9"], "jump to 0–90%"],
+  [["M"], "mark a riff"],
+  [["R"], "riff start"],
+  [["Esc"], "minimize"],
+];
+
+/** The player's keyboard shortcuts (hidden on touch-only screens). */
+function Shortcuts() {
+  return (
+    <p className="meta riff-keys" aria-label="Keyboard shortcuts">
+      {SHORTCUTS.map(([keys, what]) => (
+        <span key={what}>
+          {keys.map((k) => (
+            <kbd key={k}>{k}</kbd>
+          ))}{" "}
+          {what}
+        </span>
+      ))}
+    </p>
   );
 }

@@ -16,7 +16,7 @@ import { hostLabel } from "@/lib/shared/urls";
 import { scaleSuggestions } from "@/lib/shared/music";
 import { transposeFor } from "@/lib/shared/tuning";
 import { clearStar, holdFor, starHere } from "./BacklogCard";
-import { NativeVideo, type Engine, type Variant } from "./NativeVideo";
+import { NativeVideo, SPEEDS as NATIVE_SPEEDS, type Engine, type Variant } from "./NativeVideo";
 import { CarMode, RadioPanel } from "./RadioControls";
 import { RiffBar } from "./RiffBar";
 import { SourceBadge } from "./SourceBadge";
@@ -26,6 +26,7 @@ import { Thumb } from "./Thumb";
 interface YTPlayer {
   loadVideoById(o: { videoId: string; startSeconds?: number }): void;
   setPlaybackRate(rate: number): void;
+  getPlaybackRate(): number;
   getCurrentTime(): number;
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   playVideo(): void;
@@ -424,6 +425,11 @@ export function Player() {
           seek: (t) => ready() && player.seekTo(t, true),
           play: () => ready() && player.playVideo(),
           pause: () => ready() && player.pauseVideo(),
+          rate: () => (ready() ? player.getPlaybackRate() : 1),
+          setRate: (r) => {
+            setSpeed(r);
+            if (ready()) player.setPlaybackRate(r);
+          },
         };
       })
       .catch(() => setError("Couldn't load the YouTube player. Check your connection."));
@@ -536,17 +542,68 @@ export function Player() {
     wrap.current?.replaceChildren();
   }, [state]);
 
+  // Keyboard shortcuts for both engines (YouTube's own only work while its frame has focus).
+  // Tablet keyboards and Bluetooth page-turner pedals too. "M" (mark a riff) lives in the RiffBar.
+  const [keyFlash, setKeyFlash] = useState<{ id: number; text: string } | null>(null);
+  const nativeRef = useRef(native);
+  useEffect(() => {
+    nativeRef.current = native;
+  });
   useEffect(() => {
     if (!expanded) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setPlayerExpanded(false);
+    const show = (text: string) => setKeyFlash({ id: performance.now(), text });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return setPlayerExpanded(false);
+      const target = e.target as HTMLElement | null;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (target && (/INPUT|TEXTAREA|SELECT/.test(target.tagName) || target.isContentEditable)) return;
+      const p = engine.current;
+      if (!p) return;
+      const by = (sec: number) => {
+        const d = p.duration();
+        p.seek(Math.max(0, Math.min(p.time() + sec, d ? d - 0.05 : Infinity)));
+        show(sec < 0 ? `−${-sec}s` : `+${sec}s`);
+      };
+      const speeds = nativeRef.current ? NATIVE_SPEEDS : SPEEDS;
+      const setRate = (r: number) => {
+        p.setRate(r);
+        show(r === 1 ? "1×" : `${r}×`);
+      };
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (key === " " || key === "k") {
+        const was = p.playing();
+        if (was) p.pause();
+        else p.play();
+        show(was ? "Pause" : "Play");
+      } else if (key === "j") by(-10);
+      else if (key === "l") by(10);
+      else if (key === "ArrowLeft" || key === "PageUp") by(-5);
+      else if (key === "ArrowRight" || key === "PageDown") by(5);
+      else if (key === ",") by(-1);
+      else if (key === ".") by(1);
+      else if (key === "<") setRate([...speeds].reverse().find((s) => s < p.rate() - 0.01) ?? speeds[0]);
+      else if (key === ">") setRate(speeds.find((s) => s > p.rate() + 0.01) ?? speeds[speeds.length - 1]);
+      else if (key === "Home") {
+        p.seek(0);
+        show("0:00");
+      } else if (/^[0-9]$/.test(key)) {
+        p.seek((p.duration() * Number(key)) / 10);
+        show(`${Number(key) * 10}%`);
+      } else if (key === "r" && loopRef.current) {
+        seekOwn(loopRef.current.a);
+        p.play();
+        show("Riff start");
+      } else return;
+      e.preventDefault();
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [expanded]);
+  }, [expanded, seekOwn]);
 
   if (!state || !media) return null;
   const carMode = expanded && onAir && !!radio?.car && !!view;
@@ -587,6 +644,11 @@ export function Player() {
           />
         ) : (
           <div className="player-video" ref={wrap} />
+        )}
+        {keyFlash && (
+          <div key={keyFlash.id} className="key-flash" aria-hidden>
+            {keyFlash.text}
+          </div>
         )}
         {burst > 0 && (
           <div key={burst} className="autoplus" aria-hidden>

@@ -112,6 +112,10 @@ and every YouTube original, cover, lesson and backing track, one tap away.
   random one you already know. A song can be **Just riffs** (chosen when adding it, or
   switched on the song page): it stays off the Library board and lives only in the Riffs tab.
 
+- **Player shortcuts.** The same keys for YouTube and on-device videos (shown under the riff button
+  on screens with a keyboard): Space/K play-pause, J/L ∓10s, ←/→ (and pedal PageUp/PageDown) ∓5s,
+  ,/. ∓1s, </> speed, 0–9 jump to 0–90%, Home to the start, M marks a riff, R back to the riff's
+  start, Esc minimizes.
 - **Jam.** A separate library of YouTube backing tracks (`/jam`) with key, tempo, style and meter
   (read from the video title when possible, plus tap tempo). Filter by key/tempo/style, sort by plays,
   "Surprise me" picks a random one (favouring the least played), and the player suggests scales for the key.

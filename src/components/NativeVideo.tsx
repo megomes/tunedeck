@@ -15,6 +15,8 @@ export interface Engine {
   seek(t: number): void;
   play(): void;
   pause(): void;
+  rate(): number;
+  setRate(r: number): void;
 }
 
 export interface Variant {
@@ -22,7 +24,7 @@ export interface Variant {
   label: string;
 }
 
-const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
+export const SPEEDS = [0.5, 0.6, 0.7, 0.8, 0.9, 1];
 const SKIP = 5;
 /** Dragging across the whole video moves this many seconds. */
 const SCRUB_SPAN = 40;
@@ -136,6 +138,15 @@ export function NativeVideo({
   /** What plays the sound and keeps the time: the shared audio in background mode, else the video. */
   const cur = useCallback((): HTMLMediaElement | null => (audioMode ? sharedAudio() : shown()), [audioMode, shown]);
 
+  const applyRate = useCallback(
+    (s: number) => {
+      setRate(s);
+      Object.values(els.current).forEach((v) => v && (v.playbackRate = s));
+      if (audioMode) sharedAudio().playbackRate = s;
+    },
+    [audioMode],
+  );
+
   useEffect(() => {
     engineRef.current = {
       time: () => cur()?.currentTime ?? 0,
@@ -150,11 +161,13 @@ export function NativeVideo({
       },
       play: () => void cur()?.play().catch(() => {}),
       pause: () => cur()?.pause(),
+      rate: () => cur()?.playbackRate ?? 1,
+      setRate: (r) => applyRate(r),
     };
     return () => {
       engineRef.current = null;
     };
-  }, [engineRef, cur]);
+  }, [engineRef, cur, applyRate]);
 
   // ---------- Background mode: the shared audio plays, the video follows ----------
 
@@ -340,22 +353,6 @@ export function NativeVideo({
     else setLoop(null);
   }
 
-  // Keyboard (tablet keyboards, Bluetooth page-turner pedals).
-  useEffect(() => {
-    if (!expanded) return;
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && /INPUT|TEXTAREA|SELECT/.test(target.tagName)) return;
-      if (e.key === " " || e.key === "k") togglePlay();
-      else if (e.key === "ArrowLeft" || e.key === "j" || e.key === "PageUp") seekBy(-SKIP);
-      else if (e.key === "ArrowRight" || e.key === "l" || e.key === "PageDown") seekBy(SKIP);
-      else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [expanded, togglePlay, seekBy]);
-
   // Lock screen / headphone controls.
   useEffect(() => {
     const ms = navigator.mediaSession;
@@ -529,11 +526,7 @@ export function NativeVideo({
             <button
               key={s}
               className={`chip sm ${rate === s ? "active" : ""}`}
-              onClick={() => {
-                setRate(s);
-                Object.values(els.current).forEach((v) => v && (v.playbackRate = s));
-                if (audioMode) sharedAudio().playbackRate = s;
-              }}
+              onClick={() => applyRate(s)}
             >
               {s === 1 ? "1×" : `${s}×`}
             </button>
