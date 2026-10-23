@@ -332,18 +332,16 @@ export function openLink(url: string, entryId?: string) {
 }
 
 /**
- * On a computer the tab opens in its own window, next to TuneDeck. On phones and tablets it is a
+ * On a computer the tab opens in a new browser tab, keeping TuneDeck open. On phones and tablets it is a
  * straight redirect: a top-level navigation to the HTTPS URL lets the OS hand it to the installed
  * Songsterr app (or opens the site), and Back returns to TuneDeck.
  */
 export function openSongsterr(url: string, entryId: string) {
   setActiveSong(entryId);
   if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-    const w = Math.min(1200, Math.round(screen.availWidth * 0.6));
-    const h = Math.round(screen.availHeight * 0.9);
-    // Without features the browser would open a tab; with them, a window. Not "noopener": that makes
-    // open() return null, which reads as a blocked popup (and those fall back to the redirect).
-    const win = window.open(url, "_blank", `popup,width=${w},height=${h}`);
+    // No "noopener": that makes open() return null, which reads as a blocked popup (and those
+    // fall back to the redirect).
+    const win = window.open(url, "_blank");
     if (win) {
       win.opener = null;
       return;
