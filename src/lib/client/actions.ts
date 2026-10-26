@@ -233,7 +233,12 @@ export function setRiffOnly(entryId: string, riffOnly: boolean) {
 
 export function toggleFavorite(entryId: string) {
   const e = entry(entryId);
-  if (e) updateEntry(entryId, { isFavorite: !e.isFavorite });
+  if (!e) return;
+  updateEntry(entryId, { isFavorite: !e.isFavorite });
+  toast(e.isFavorite ? "Unpinned" : "♥ Pinned: in the Library's Pinned filter and the Pinned radio", {
+    label: "Undo",
+    run: () => updateEntry(entryId, { isFavorite: e.isFavorite }),
+  });
 }
 
 export function deleteEntry(entryId: string) {

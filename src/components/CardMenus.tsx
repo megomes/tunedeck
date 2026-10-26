@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Flag, Guitar, Pencil, Play, Plus, Star, Trash2, Zap } from "lucide-react";
+import { ExternalLink, Flag, Guitar, Heart, Pencil, Play, Plus, Star, Trash2, Zap } from "lucide-react";
 import {
   deleteEntry,
   deleteJam,
@@ -37,7 +37,7 @@ export function songMenu(view: SongView, video: { externalId: string | null } | 
       icon: <Flag />,
       children: STATUSES.map((s) => ({ label: STATUS_LABEL[s], dot: STATUS_DOT[s], checked: entry.status === s, onSelect: () => setStatus(view.id, s) })),
     },
-    { label: entry.isFavorite ? "Unpin" : "Pin", icon: <Star />, onSelect: () => toggleFavorite(view.id) },
+    { label: entry.isFavorite ? "Unpin" : "Pin", icon: <Heart />, onSelect: () => toggleFavorite(view.id) },
     { label: "Just riffs (move to Riffs)", icon: <Zap />, onSelect: () => setRiffOnly(view.id, true) },
     "separator",
     { label: "Open song", icon: <ExternalLink />, onSelect: () => go(`/song?id=${view.id}`) },

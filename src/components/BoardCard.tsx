@@ -1,6 +1,6 @@
 "use client";
 
-import { Guitar, Play, Star } from "lucide-react";
+import { Guitar, Heart, Play } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { CSSProperties, HTMLAttributes, Ref } from "react";
 import { openResource, openSongsterr } from "@/lib/client/actions";
@@ -102,7 +102,7 @@ export function BoardCard({
       </div>
       <div className="bcard-main">
         <span className="bcard-title truncate">
-          {entry.isFavorite && <Star size={11} fill="currentColor" className="bcard-star" />}
+          {entry.isFavorite && <Heart size={11} fill="currentColor" className="bcard-star" />}
           {song.title}
         </span>
         <span className="secondary truncate">{song.artist || "Unknown artist"}</span>

@@ -262,9 +262,9 @@ export default function PlayNowPage() {
                       {entry.tuning && <span className="badge">{entry.tuning}</span>}
                       {x.duration != null && <span className="badge">{clock(x.duration)}</span>}
                       {x.star != null && (
-                        <span {...holdFor(unstar(x))} className="badge star-hold">
-                          <Star fill="currentColor" /> {clock(x.star)}
-                        </span>
+                        <button className="badge star-hold" onClick={() => unstar(x)?.()} aria-label="Remove the star">
+                          <Star fill="currentColor" /> {clock(x.star)} <X />
+                        </button>
                       )}
                       {entry.difficulty ? <DifficultyMeter value={entry.difficulty} /> : null}
                       {clip?.paused && <span className="badge">Paused</span>}

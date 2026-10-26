@@ -167,11 +167,16 @@ function StarRow({
         <Star fill={star != null ? "currentColor" : "none"} /> {star != null ? "Move ⭐ here" : "Favorite moment"}
       </button>
       {star != null && (
-        <button className="chip sm" onClick={() => seek(star)} aria-label="Jump to the star">
-          <Play /> {duration(star)}
-        </button>
+        <>
+          <button className="chip sm" onClick={() => seek(star)} aria-label="Jump to the star">
+            <Play /> {duration(star)}
+          </button>
+          <button className="chip sm" onClick={() => clearStar(entryId, resource, star)} aria-label="Remove the star">
+            <X /> Remove
+          </button>
+        </>
       )}
-      <span className="hint">{star != null ? "Hold the star to remove it" : "Tap where your favorite part starts"}</span>
+      {star == null && <span className="hint">Tap where your favorite part starts</span>}
     </div>
   );
 }
@@ -688,7 +693,7 @@ export function Player() {
           )}
 
           {/* ⭐ where the favorite passage starts: Backlog previews and "What do I play now?" start there. */}
-          {native && view && resource && <StarRow entryId={view.id} resource={resource} star={view.entry.stars?.[resource.id] ?? null} engine={engine} seek={seekOwn} />}
+          {view && resource && <StarRow entryId={view.id} resource={resource} star={view.entry.stars?.[resource.id] ?? null} engine={engine} seek={seekOwn} />}
 
           <div className="player-info">
             <h2 className="clamp-2" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>

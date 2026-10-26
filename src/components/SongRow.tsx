@@ -1,6 +1,6 @@
 "use client";
 
-import { Guitar, Star } from "lucide-react";
+import { Guitar, Heart } from "lucide-react";
 import Link from "next/link";
 import { openSongsterr } from "@/lib/client/actions";
 import { plays, timeAgo } from "@/lib/client/format";
@@ -30,7 +30,7 @@ export function SongRow({
       </Link>
       <Link href={href} className="row-main">
         <span className="row-title truncate">
-          {entry.isFavorite && <Star size={12} fill="currentColor" style={{ display: "inline", marginRight: 5, verticalAlign: -1 }} />}
+          {entry.isFavorite && <Heart size={12} fill="currentColor" style={{ display: "inline", marginRight: 5, verticalAlign: -1 }} />}
           {song.title}
         </span>
         <span className="secondary truncate">{song.artist || "Unknown artist"}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, Guitar, Play, Plus, SlidersHorizontal, Star, Trash2, X } from "lucide-react";
+import { ChevronLeft, Guitar, Heart, Play, Plus, SlidersHorizontal, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -211,7 +211,7 @@ function SongDetail() {
   const back = () => (window.history.length > 1 ? router.back() : router.push("/"));
   const pin = (
     <button className="icon-btn" aria-label={entry.isFavorite ? "Unpin" : "Pin"} onClick={() => toggleFavorite(view.id)}>
-      <Star fill={entry.isFavorite ? "currentColor" : "none"} />
+      <Heart fill={entry.isFavorite ? "currentColor" : "none"} />
     </button>
   );
   const details = (

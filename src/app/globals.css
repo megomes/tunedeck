@@ -4709,6 +4709,16 @@ a.playnow:hover {
 .feed-tags .badge svg {
   color: #f5c542;
 }
+/* The ⭐ badge is a button: tapping it removes the star. */
+.feed-tags button.badge {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.feed-tags button.badge svg:last-child {
+  color: inherit;
+  opacity: 0.7;
+}
 .feed-rail {
   position: absolute;
   right: 12px;
