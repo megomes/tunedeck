@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { initOffline } from "@/lib/client/offline";
 import { initStore, useStore } from "@/lib/client/store";
-import { dismissToast, setActiveSong, useActiveSong, usePlayer, useToasts } from "@/lib/client/ui";
+import { dismissToast, setActiveSong, setPlayerExpanded, useActiveSong, usePlayer, useToasts } from "@/lib/client/ui";
 import { useView } from "@/lib/client/views";
 import { ContextMenuHost } from "./ContextMenu";
 import { OfflineBanner } from "./OfflineVideos";
@@ -27,6 +27,9 @@ const NAV = [
 ];
 /** The phone bar has room for five; Tags stays reachable from Settings, Listen from the Library's top bar. */
 const PHONE_NAV = NAV.filter((n) => n.href !== "/tags" && n.href !== "/listen");
+
+/** The full player covers the page: going somewhere from the menu shrinks it to the mini-player. */
+const minimize = () => setPlayerExpanded(false);
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -111,16 +114,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app">
       <aside className="sidebar">
-        <Link href="/" className="brand">
+        <Link href="/" className="brand" onClick={minimize}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/icons/logo-96.png" alt="" />
           TuneDeck
         </Link>
-        <Link href={addHref} className="btn btn-primary">
+        <Link href={addHref} className="btn btn-primary" onClick={minimize}>
           <Plus /> {inJam ? "Add backing track" : inRiffs ? "Add for riffs" : inBacklog ? "Add to Backlog" : "Add"}
         </Link>
         {NAV.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={`side-item ${isActive(pathname, href) ? "active" : ""}`}>
+          <Link key={href} href={href} className={`side-item ${isActive(pathname, href) ? "active" : ""}`} onClick={minimize}>
             <Icon />
             {label}
           </Link>
@@ -147,18 +150,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <nav className="bottom-nav" aria-label="Main">
         {PHONE_NAV.slice(0, 3).map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
+          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`} onClick={minimize}>
             <Icon />
             {label}
           </Link>
         ))}
         <div className="nav-add">
-          <Link href={addHref} aria-label={inJam ? "Add backing track" : "Add song"}>
+          <Link href={addHref} aria-label={inJam ? "Add backing track" : "Add song"} onClick={minimize}>
             <Plus />
           </Link>
         </div>
         {PHONE_NAV.slice(3).map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`}>
+          <Link key={href} href={href} className={`nav-item ${isActive(pathname, href) ? "active" : ""}`} onClick={minimize}>
             <Icon />
             {label}
           </Link>
