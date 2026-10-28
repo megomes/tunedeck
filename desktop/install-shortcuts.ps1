@@ -15,3 +15,19 @@ foreach ($lnk in $targets) {
   $s.Save()
   Write-Output "Shortcut: $lnk"
 }
+
+# Phones connect straight to the app over the local network (WebRTC + mDNS). Without an inbound
+# rule Windows drops that traffic and phones stay on "Connecting...". Asks for admin (UAC) once.
+$rule = Get-NetFirewallApplicationFilter -Program $exe -ErrorAction SilentlyContinue |
+  Get-NetFirewallRule | Where-Object { $_.Direction -eq "Inbound" -and $_.Action -eq "Allow" -and $_.Enabled -eq "True" }
+if ($rule) {
+  Write-Output "Firewall: TuneDeck already allowed"
+} else {
+  $cmd = "New-NetFirewallRule -DisplayName 'TuneDeck' -Direction Inbound -Program '$exe' -Action Allow -Profile Private | Out-Null"
+  try {
+    Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList "-NoProfile", "-Command", $cmd
+    Write-Output "Firewall: allowed TuneDeck on private networks"
+  } catch {
+    Write-Warning "Firewall rule not added (admin prompt declined). Phones won't connect until TuneDeck is allowed in Windows Firewall."
+  }
+}
