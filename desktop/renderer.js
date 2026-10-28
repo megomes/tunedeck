@@ -167,12 +167,19 @@ async function accept({ sid, sdp, device }) {
   paint();
   pc.ondatachannel = (e) => setupChannel(peer, e.channel);
   pc.onconnectionstatechange = () => {
-    if (["failed", "closed"].includes(pc.connectionState)) drop(peer);
+    rtcLog(sid, "connection", pc.connectionState);
+    if (pc.connectionState === "failed") void logPairs(sid, pc).finally(() => drop(peer));
+    else if (pc.connectionState === "closed") drop(peer);
+  };
+  pc.oniceconnectionstatechange = () => {
+    rtcLog(sid, "ice", pc.iceConnectionState);
+    if (pc.iceConnectionState === "disconnected") void logPairs(sid, pc);
   };
   try {
-    await pc.setRemoteDescription({ type: "offer", sdp });
+    rtcLog(sid, "offer from", device, candidates(sdp));    await pc.setRemoteDescription({ type: "offer", sdp });
     await pc.setLocalDescription(await pc.createAnswer());
     await waitIce(pc, 2500);
+    rtcLog(sid, "answer", candidates(pc.localDescription.sdp));
     await api.answer(sid, pc.localDescription.sdp);
   } catch (err) {
     console.error("answer failed", err);
@@ -180,7 +187,32 @@ async function accept({ sid, sdp, device }) {
     return;
   }
   // Phones on another network never connect: forget them.
-  setTimeout(() => !peer.connected && drop(peer), 45_000);
+  setTimeout(() => {
+    if (peer.connected) return;
+    void logPairs(sid, pc).finally(() => drop(peer));
+  }, 45_000);
+}
+
+// Connection diagnostics, written to webrtc.log in the app's data folder by the main process.
+const rtcLog = (sid, ...parts) => console.info("[webrtc]", sid.slice(0, 8), ...parts);
+const candidates = (sdp) => sdp.split(/\r?\n/).filter((l) => l.startsWith("a=candidate:")).map((l) => l.split(" ").slice(4, 8).join(" ")).join(" | ") || "none";
+
+async function logPairs(sid, pc) {
+  try {
+    const stats = await pc.getStats();
+    const cands = new Map();
+    stats.forEach((s) => (s.type === "local-candidate" || s.type === "remote-candidate") && cands.set(s.id, s));
+    const types = {};
+    stats.forEach((s) => (types[s.type] = (types[s.type] ?? 0) + 1));
+    rtcLog(sid, "stats", JSON.stringify(types));
+    stats.forEach((s) => s.type.endsWith("candidate") && rtcLog(sid, s.type, s.address ?? s.ip, s.port, s.protocol, s.candidateType));
+    const show = (c) => (c ? `${c.address ?? c.ip}:${c.port}/${c.protocol} ${c.candidateType}` : "?");
+    stats.forEach((s) => {
+      if (s.type === "candidate-pair") rtcLog(sid, "pair", show(cands.get(s.localCandidateId)), "->", show(cands.get(s.remoteCandidateId)), s.state, `req ${s.requestsSent ?? 0}/resp ${s.responsesReceived ?? 0}`);
+    });
+  } catch (err) {
+    rtcLog(sid, "stats failed", String(err));
+  }
 }
 
 function send(peer, msg) {

@@ -108,6 +108,18 @@ function createWindow() {
     win.hide();
   });
   win.webContents.on("did-finish-load", push);
+  // Phone connection diagnostics from the window go to webrtc.log (kept short).
+  win.webContents.on("console-message", (e, _level, legacyMessage) => {
+    const message = e.message ?? legacyMessage;
+    if (!message?.startsWith("[webrtc]")) return;
+    const file = path.join(app.getPath("userData"), "webrtc.log");
+    try {
+      if (fs.existsSync(file) && fs.statSync(file).size > 512 * 1024) fs.renameSync(file, file + ".old");
+      fs.appendFileSync(file, `${new Date().toISOString()} ${message.slice(9)}\n`);
+    } catch {
+      /* diagnostics only */
+    }
+  });
 }
 
 function showWindow() {
