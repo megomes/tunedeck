@@ -40,7 +40,7 @@ export interface TransferItem {
   error?: string;
 }
 
-export type PcStatus = "idle" | "looking" | "connecting" | "connected" | "unreachable";
+export type PcStatus = "idle" | "looking" | "connecting" | "connected" | "unreachable" | "blocked";
 
 export interface PlaylistSync {
   state: "idle" | "running" | "done" | "error";
@@ -284,6 +284,21 @@ function disconnect(status: PcStatus = "idle") {
 }
 
 /**
+ * Chrome's Local Network Access permission: when it is denied, WebRTC silently drops the
+ * computer's LAN addresses. null when the browser doesn't know the permission.
+ */
+async function localNetworkPermission(): Promise<PermissionState | null> {
+  for (const name of ["local-network-access", "local-network"]) {
+    try {
+      return (await navigator.permissions.query({ name } as unknown as PermissionDescriptor)).state;
+    } catch {
+      /* unknown permission name in this browser */
+    }
+  }
+  return null;
+}
+
+/**
  * Looks for the desktop app and connects to it. Only succeeds on the same network:
  * no STUN/TURN servers are used, so the peers can only reach each other's LAN address.
  */
@@ -306,6 +321,10 @@ export async function findDesktop(force = false): Promise<boolean> {
     name = body.name as string;
   } catch {
     setState({ pcStatus: "idle" });
+    return false;
+  }
+  if ((await localNetworkPermission()) === "denied") {
+    setState({ pcStatus: "blocked", pcName: name });
     return false;
   }
 
@@ -352,7 +371,7 @@ export async function findDesktop(force = false): Promise<boolean> {
     });
   } catch (err) {
     console.info("Desktop app not reachable", err);
-    if (conn === pc) disconnect("unreachable");
+    if (conn === pc) disconnect((await localNetworkPermission()) === "denied" ? "blocked" : "unreachable");
     return false;
   }
 

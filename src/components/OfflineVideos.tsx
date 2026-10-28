@@ -167,9 +167,17 @@ export function OfflineVideosSection() {
       ? `Connected to ${pcName ?? "your computer"}`
       : searching
         ? `Looking for ${pcName ?? "your computer"}…`
-        : pcStatus === "unreachable"
-          ? `${pcName ?? "Your computer"} is on, but not on this Wi-Fi`
-          : "Open TuneDeck on your computer, on the same Wi-Fi";
+        : pcStatus === "blocked"
+          ? `Chrome is blocking ${pcName ?? "your computer"}`
+          : pcStatus === "unreachable"
+            ? `Can't reach ${pcName ?? "your computer"}`
+            : "Open TuneDeck on your computer, on the same Wi-Fi";
+  const hint =
+    pcStatus === "blocked"
+      ? "Allow Local network access for this site: tap the icon left of the address (or Chrome → Settings → Site settings → Local network access), then tap Find."
+      : pcStatus === "unreachable"
+        ? "Is it on the same Wi-Fi? If Chrome asks to connect to devices on your local network, allow it."
+        : null;
 
   return (
     <section className="section" id="videos">
@@ -188,6 +196,7 @@ export function OfflineVideosSection() {
             </button>
           )}
         </div>
+        {hint && <span className={pcStatus === "blocked" ? "error-text" : "meta"}>{hint}</span>}
         <div className="row-gap">
           <span className="grow meta">
             {stored.length} saved · {fileSize(bytes)}
