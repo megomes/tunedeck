@@ -29,7 +29,8 @@ let quitting = false;
 // ---------- Config ----------
 
 const configPath = () => path.join(app.getPath("userData"), "config.json");
-let config = { server: DEFAULT_SERVER, token: null, pcId: null, name: os.hostname() };
+// openAtLogin: starts with Windows, hidden in the tray, unless turned off in the window.
+let config = { server: DEFAULT_SERVER, token: null, pcId: null, name: os.hostname(), openAtLogin: true };
 
 function loadConfig() {
   try {
@@ -68,7 +69,7 @@ function push() {
   status.server = config.server;
   status.name = config.name;
   status.signedIn = Boolean(config.token);
-  status.openAtLogin = app.getLoginItemSettings().openAtLogin;
+  status.openAtLogin = config.openAtLogin;
   win?.webContents.send("status", status);
   tray?.setToolTip(trayTip());
 }
@@ -91,7 +92,8 @@ function createWindow() {
     icon: path.join(__dirname, "icon.png"),
     backgroundColor: "#0a0a0a",
     autoHideMenuBar: true,
-    show: !process.argv.includes("--hidden"),
+    // Started with Windows: stay in the tray, unless there's no sign-in yet.
+    show: !process.argv.includes("--hidden") || !config.token,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -305,8 +307,16 @@ function scanLibrary() {
 }
 
 ipcMain.handle("open-folder", () => shell.openPath(ensureDir(videosDir())));
+// Re-registered on every launch so the Windows startup entry follows the current exe.
+function applyOpenAtLogin() {
+  if (!app.isPackaged) return;
+  app.setLoginItemSettings({ openAtLogin: config.openAtLogin, args: ["--hidden"] });
+}
+
 ipcMain.handle("set-open-at-login", (_e, on) => {
-  app.setLoginItemSettings({ openAtLogin: Boolean(on), args: ["--hidden"] });
+  config.openAtLogin = Boolean(on);
+  saveConfig();
+  applyOpenAtLogin();
   push();
 });
 
@@ -835,6 +845,7 @@ ipcMain.handle("retry", (_e, videoId) => {
 
 app.whenReady().then(async () => {
   loadConfig();
+  applyOpenAtLogin();
   if (process.platform === "win32") app.setAppUserModelId("app.tunedeck.desktop");
   createTray();
   createWindow();
