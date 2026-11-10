@@ -5778,3 +5778,43 @@ a.playnow:hover {
 .share-links a.is-main:hover {
   background: #fff;
 }
+/* Phones: 3 columns, so the cards get compact. */
+@media (max-width: 639px) {
+  .share-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .share-card {
+    border-radius: 10px;
+  }
+  .share-body {
+    padding: 7px 7px 8px;
+    gap: 1px;
+  }
+  .share-title {
+    font-size: 12px;
+  }
+  .share-artist {
+    font-size: 11px;
+  }
+  .share-meta {
+    font-size: 10px;
+  }
+  .share-links {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-top: 7px;
+  }
+  .share-links a {
+    padding: 5px 2px;
+    font-size: 10.5px;
+  }
+  .share-play {
+    width: 30px;
+    height: 30px;
+  }
+  .share-play svg {
+    width: 14px;
+    height: 14px;
+  }
+}
