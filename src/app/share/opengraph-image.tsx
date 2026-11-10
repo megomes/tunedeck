@@ -50,7 +50,7 @@ export default async function Image() {
   const png = new ImageResponse(
     (
       <div style={{ width: "100%", height: "100%", display: "flex", position: "relative", background: "#0a0a0a", fontFamily: "Inter" }}>
-        <div style={{ position: "absolute", inset: 0, display: "flex", flexWrap: "wrap" }}>
+        <div style={{ position: "absolute", top: 0, left: 0, width: W, height: H, display: "flex", flexWrap: "wrap", overflow: "hidden" }}>
           {tiles.map((src, i) => (
             // eslint-disable-next-line @next/next/no-img-element -- rendered into the image, not the page
             <img key={i} src={src} width={TILE_W} height={TILE_H} style={{ objectFit: "cover" }} alt="" />
@@ -59,7 +59,10 @@ export default async function Image() {
         <div
           style={{
             position: "absolute",
-            inset: 0,
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
             display: "flex",
             background: "radial-gradient(circle at 50% 50%, rgba(10,10,10,0.97) 0%, rgba(10,10,10,0.9) 32%, rgba(10,10,10,0.55) 75%)",
           }}
@@ -67,7 +70,10 @@ export default async function Image() {
         <div
           style={{
             position: "absolute",
-            inset: 0,
+            top: 0,
+            left: 0,
+            width: W,
+            height: H,
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
