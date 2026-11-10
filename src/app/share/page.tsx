@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { loadSnapshot } from "@/lib/server/data";
 import type { Entry, Resource, Snapshot } from "@/lib/shared/types";
-import { youtubeId, ytThumb } from "@/lib/shared/urls";
+import { youtubeId } from "@/lib/shared/urls";
 
 export const metadata: Metadata = {
   title: "O que estou tocando",
@@ -42,7 +42,8 @@ function rows(snap: Snapshot, entries: Entry[], riffsOf?: (e: Entry) => string[]
       riffs: riffsOf?.(e) ?? [],
       original: video("original"),
       cover: video("guitar_cover"),
-      thumb: picId ? ytThumb(picId) : (pic?.thumbnailUrl ?? null),
+      // mqdefault is 16:9 with no black bars, unlike hqdefault.
+      thumb: picId ? `https://i.ytimg.com/vi/${picId}/mqdefault.jpg` : (pic?.thumbnailUrl ?? null),
     };
   });
 }
