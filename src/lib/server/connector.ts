@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { applyOps, loadSnapshot } from "@/lib/server/data";
 import { enrichUrl, type YoutubeMeta } from "@/lib/server/enrich";
-import { findTab, searchYoutube } from "@/lib/server/search";
+import { searchYoutube } from "@/lib/server/search";
 import {
   INSTRUMENTS,
   RESOURCE_TYPES,
@@ -32,8 +32,11 @@ When the user asks to add a song ("adiciona Misery Business no Backlog"), do it 
    "original", and the best full-song guitar cover as "guitar_cover" (prefer many views, on-screen tabs, the full song
    rather than a riff, solo or lesson). Add a "lesson" or "backing_track" only when asked, or when the status is
    Up Next / Learning.
-3. add_song with the clean title and the original artist ("Misery Business", "Paramore"). It finds the Songsterr tab
-   and its tuning by itself. Default status: Backlog; default instrument: guitar.
+3. Find the song's Songsterr page with your own web search ("<artist> <title> songsterr") and pass its URL as
+   songsterrUrl (a songsterr.com/a/wsa/... link of the song itself, not a different version). Pass the guitar tuning
+   too when you know it ("E Standard", "Eb Standard", "Drop D"...). TuneDeck does not query Songsterr itself.
+4. add_song with the clean title and the original artist ("Misery Business", "Paramore"). Default status: Backlog;
+   default instrument: guitar.
 Reply briefly: what was added, which videos, the tab, the tuning.`;
 
 type Args = Record<string, unknown>;
@@ -107,13 +110,6 @@ async function searchYoutubeTool(args: Args) {
   return { videos: await searchYoutube(query, limit) };
 }
 
-async function findTabTool(args: Args) {
-  const title = str(args.title);
-  const artist = str(args.artist);
-  if (!title) throw new Error("title is required");
-  return { tab: await findTab(title, artist) };
-}
-
 async function addSong(args: Args, origin: string) {
   const title = str(args.title);
   const artist = str(args.artist);
@@ -175,19 +171,15 @@ async function addSong(args: Args, origin: string) {
     });
   });
 
-  // Tab: the one given, else Songsterr's most viewed match, unless the song already has one.
+  // Tab and tuning: only what Claude passes, and never over what the song already has.
   let tabNote: string | null = null;
   const givenTab = str(args.songsterrUrl);
   const givenTuning = str(args.tuning) || null;
   const patch: Partial<Entry> = {};
-  if (!entry.songsterrUrl && instrument !== "piano") {
-    const tab = givenTab ? { url: givenTab, tuning: null } : await findTab(title, artist).catch(() => null);
-    if (tab) patch.songsterrUrl = tab.url;
-    else tabNote = "No matching Songsterr tab found.";
-    if (!entry.tuning) patch.tuning = givenTuning ?? tab?.tuning ?? null;
-  } else if (givenTuning && !entry.tuning) {
-    patch.tuning = givenTuning;
-  }
+  if (givenTab && !/^https:\/\/(www\.)?songsterr\.com\//.test(givenTab)) throw new Error("songsterrUrl must be a songsterr.com link");
+  if (givenTab && !entry.songsterrUrl && instrument !== "piano") patch.songsterrUrl = givenTab;
+  else if (!givenTab && !entry.songsterrUrl) tabNote = "No Songsterr tab: find the song's songsterr.com link and call add_song again with songsterrUrl.";
+  if (givenTuning && !entry.tuning && instrument !== "piano") patch.tuning = givenTuning;
   if (!existed || Object.keys(patch).length) {
     entry = { ...entry, ...patch, updatedAt: now };
     ops.push({ t: "entry.upsert", entry });
@@ -262,21 +254,10 @@ export const TOOLS = [
     annotations: { readOnlyHint: true, openWorldHint: true },
   },
   {
-    name: "find_tab",
-    title: "Find a Songsterr tab",
-    description: "Finds the most viewed Songsterr tab for a song and its guitar tuning. add_song already does this; use it to check.",
-    inputSchema: {
-      type: "object",
-      properties: { title: { type: "string" }, artist: { type: "string" } },
-      required: ["title", "artist"],
-    },
-    annotations: { readOnlyHint: true, openWorldHint: true },
-  },
-  {
     name: "add_song",
     title: "Add a song to TuneDeck",
     description:
-      "Adds a song with its YouTube videos to TuneDeck (top of the chosen status column), finds its Songsterr tab and tuning. " +
+      "Adds a song with its YouTube videos, Songsterr tab and tuning to TuneDeck (top of the chosen status column). " +
       "If the song already exists, only the missing videos/tab are added and its status is kept.",
     inputSchema: {
       type: "object",
@@ -296,8 +277,8 @@ export const TOOLS = [
             required: ["url"],
           },
         },
-        songsterrUrl: { type: "string", description: "Only to force a specific tab" },
-        tuning: { type: "string", description: 'Only to force a tuning, e.g. "Drop D"' },
+        songsterrUrl: { type: "string", description: "The song's songsterr.com tab link, found with web search" },
+        tuning: { type: "string", description: 'Guitar tuning, e.g. "E Standard", "Eb Standard", "Drop D"' },
       },
       required: ["title", "artist"],
     },
@@ -322,8 +303,6 @@ export async function callTool(name: string, args: Args, origin: string): Promis
       return searchLibrary(args);
     case "search_youtube":
       return searchYoutubeTool(args);
-    case "find_tab":
-      return findTabTool(args);
     case "add_song":
       return addSong(args, origin);
     case "update_song":
