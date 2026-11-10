@@ -6,7 +6,9 @@ import {
   Copy,
   Database,
   Download,
+  ExternalLink,
   FileSpreadsheet,
+  GraduationCap,
   HardDriveDownload,
   LogOut,
   MonitorSmartphone,
@@ -176,6 +178,39 @@ function AgentFeedSection() {
             </button>
           </>
         )}
+      </div>
+    </section>
+  );
+}
+
+/** Public read-only page at /share with what is being learned and the backlog, e.g. for a teacher. */
+function ShareSection() {
+  const url = typeof window === "undefined" ? "/share" : `${window.location.origin}/share`;
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Link copied");
+    } catch {
+      prompt("Copy this link", url);
+    }
+  };
+
+  return (
+    <section className="section">
+      <p className="step-title">Share with your teacher</p>
+      <div className="panel" style={{ paddingTop: 6, paddingBottom: 6 }}>
+        <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy()}>
+          <GraduationCap />
+          <span className="grow">
+            Copy public link
+            <div className="meta">A view-only page with Learning, Up Next and Backlog. Anyone with the link can see it.</div>
+          </span>
+          <Copy />
+        </button>
+        <a className="panel-row" href="/share" target="_blank" rel="noreferrer">
+          <ExternalLink />
+          <span className="grow">Open page</span>
+        </a>
       </div>
     </section>
   );
@@ -442,6 +477,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        <ShareSection />
         <ClaudeConnectorSection />
         <AgentFeedSection />
 

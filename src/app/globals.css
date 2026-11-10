@@ -5528,3 +5528,116 @@ a.playnow:hover {
     border-radius: 0;
   }
 }
+
+/* ==========================================================================
+   Public share page (/share/[token]): read-only, for a teacher
+   ========================================================================== */
+
+.share {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: calc(var(--safe-top) + 40px) var(--gutter) calc(var(--safe-bottom) + 56px);
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+.share-head {
+  margin-bottom: var(--space-8);
+}
+.share-brand {
+  margin: 0 0 var(--space-2);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.share-head h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.share-section {
+  margin-bottom: var(--space-8);
+}
+.share-section h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.share-section h2 span {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.share-backlog summary {
+  list-style: none;
+  cursor: pointer;
+}
+.share-backlog summary::-webkit-details-marker {
+  display: none;
+}
+.share-backlog summary h2::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--text-tertiary);
+  transition: transform var(--duration-normal) var(--ease);
+}
+.share-backlog[open] summary h2::after {
+  transform: rotate(90deg);
+}
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.share-song {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.share-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.share-artist {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.share-meta {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.share-links {
+  display: flex;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+.share-links a {
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--background-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.share-links a:hover {
+  background: var(--surface-hover);
+}
+.share-empty {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
