@@ -24,73 +24,100 @@ async function inter(weight: number, text: string) {
   }
 }
 
-/** Link preview for WhatsApp & co.: title, the counts and thumbnails of what is being played. */
+const W = 1200;
+const H = 630;
+const COLS = 5;
+const TILE_W = W / COLS;
+const TILE_H = Math.round((TILE_W * 9) / 16);
+const ROWS = Math.ceil(H / TILE_H);
+
+/**
+ * Link preview for WhatsApp & co. WhatsApp often shows only a square cut from the middle,
+ * so the title and counts sit in the center, over a dimmed mosaic of the song thumbnails.
+ */
 export default async function Image() {
   await connection();
   const sections = await loadShareSections();
-  // What is being learned first, then what is played already.
-  const order = ["Aprendendo agora", "Já toco", "Próximas"];
-  const thumbs = order
-    .flatMap((t) => sections.find((s) => s.title === t)?.items ?? [])
-    .map((r) => r.thumb)
-    .filter((t): t is string => !!t)
-    .slice(0, 6);
+  // What is being learned first, then what is played already, then the rest.
+  const order = ["Aprendendo agora", "Já toco", "Próximas", "Backlog"];
+  const all = [...new Set(order.flatMap((t) => sections.find((s) => s.title === t)?.items ?? []).map((r) => r.thumb).filter((t): t is string => !!t))];
+  const tiles = all.length ? Array.from({ length: COLS * ROWS }, (_, i) => all[i % all.length]) : [];
 
   const text = `TUNEDECK${TITLE}${sections.map((s) => `${s.items.length}${s.title.toLowerCase()}`).join("")}0123456789`;
   const fonts = (await Promise.all([inter(400, text), inter(800, text)])).filter((f) => f !== null);
+  const counts = sections.filter((s) => s.title !== "Backlog");
 
   const png = new ImageResponse(
     (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          background: "radial-gradient(circle at 0% 0%, #3a0d0d 0%, #0a0a0a 55%)",
-          color: "#f5f5f5",
-          fontFamily: "Inter",
-          padding: 64,
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", width: 520 }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", position: "relative", background: "#0a0a0a", fontFamily: "Inter" }}>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexWrap: "wrap" }}>
+          {tiles.map((src, i) => (
+            // eslint-disable-next-line @next/next/no-img-element -- rendered into the image, not the page
+            <img key={i} src={src} width={TILE_W} height={TILE_H} style={{ objectFit: "cover" }} alt="" />
+          ))}
+        </div>
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            background: "radial-gradient(circle at 50% 50%, rgba(10,10,10,0.97) 0%, rgba(10,10,10,0.9) 32%, rgba(10,10,10,0.55) 75%)",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#f5f5f5",
+          }}
+        >
           <div
             style={{
               display: "flex",
-              alignSelf: "flex-start",
-              padding: "8px 18px",
+              padding: "8px 20px",
               borderRadius: 999,
-              background: "rgba(255,45,45,0.18)",
+              background: "rgba(255,45,45,0.2)",
               color: "#ff5a5a",
-              fontSize: 22,
+              fontSize: 24,
               fontWeight: 800,
-              letterSpacing: 3,
+              letterSpacing: 4,
             }}
           >
             TUNEDECK
           </div>
-          <div style={{ display: "flex", marginTop: 28, fontSize: 72, fontWeight: 800, lineHeight: 1.02, letterSpacing: -2 }}>
-            {TITLE}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginTop: 22,
+              fontSize: 92,
+              fontWeight: 800,
+              lineHeight: 1,
+              letterSpacing: -3,
+            }}
+          >
+            <span>O que estou</span>
+            <span>tocando</span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", marginTop: "auto", gap: 14 }}>
-            {sections.map((s) => (
-              <div key={s.title} style={{ display: "flex", alignItems: "center", fontSize: 30, color: "#b5b5b5" }}>
-                <div style={{ width: 16, height: 16, borderRadius: 8, background: s.tone, marginRight: 16 }} />
-                <span style={{ color: "#f5f5f5", fontWeight: 800, marginRight: 12 }}>{s.items.length}</span>
-                {s.title.toLowerCase()}
+          <div style={{ display: "flex", gap: 28, marginTop: 36 }}>
+            {counts.map((s) => (
+              <div key={s.title} style={{ display: "flex", alignItems: "center", fontSize: 30, color: "#d0d0d0" }}>
+                <div style={{ width: 14, height: 14, borderRadius: 7, background: s.tone, marginRight: 10 }} />
+                <span style={{ color: "#fff", fontWeight: 800, marginRight: 9 }}>{s.items.length}</span>
+                {s.title === "Aprendendo agora" ? "aprendendo" : s.title.toLowerCase()}
               </div>
             ))}
           </div>
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginLeft: "auto", width: 528, alignContent: "center" }}>
-          {thumbs.map((src) => (
-            // eslint-disable-next-line @next/next/no-img-element -- rendered into the PNG, not the page
-            <img key={src} src={src} width={256} height={144} style={{ borderRadius: 14, objectFit: "cover" }} alt="" />
-          ))}
         </div>
       </div>
     ),
     { ...size, fonts },
   );
-  const jpeg = await sharp(Buffer.from(await png.arrayBuffer())).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+  const jpeg = await sharp(Buffer.from(await png.arrayBuffer())).jpeg({ quality: 78, mozjpeg: true }).toBuffer();
   return new Response(new Uint8Array(jpeg), { headers: { "Content-Type": contentType } });
 }
