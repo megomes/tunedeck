@@ -16,18 +16,15 @@ interface Row {
   capo: number | null;
   /** Riffs learned on their own, when not the whole song. */
   riffs: string[];
-  tab: string | null;
-  video: string | null;
+  original: string | null;
+  cover: string | null;
 }
-
-/** The song itself first (what the teacher wants to hear), then a guitar cover. */
-const VIDEO_ORDER: Resource["type"][] = ["original", "guitar_cover", "lesson"];
 
 function rows(snap: Snapshot, entries: Entry[], riffsOf?: (e: Entry) => string[]): Row[] {
   const songs = new Map(snap.songs.map((s) => [s.id, s]));
   return entries.map((e) => {
     const res = snap.resources.filter((r) => r.repertoireEntryId === e.id);
-    const video = VIDEO_ORDER.map((t) => res.find((r) => r.type === t && r.provider === "youtube")).find(Boolean);
+    const video = (type: Resource["type"]) => res.find((r) => r.type === type && r.provider === "youtube")?.url ?? null;
     const song = songs.get(e.songId);
     return {
       id: e.id,
@@ -36,36 +33,36 @@ function rows(snap: Snapshot, entries: Entry[], riffsOf?: (e: Entry) => string[]
       tuning: e.tuning,
       capo: e.capo,
       riffs: riffsOf?.(e) ?? [],
-      tab: e.songsterrUrl ?? res.find((r) => r.provider === "songsterr")?.url ?? null,
-      video: video?.url ?? null,
+      original: video("original"),
+      cover: video("guitar_cover"),
     };
   });
 }
 
 function List({ items }: { items: Row[] }) {
   return (
-    <ul className="share-list">
+    <ul className="share-grid">
       {items.map((r) => {
         const meta = [r.riffs.length ? `Só ${r.riffs.join(", ")}` : null, r.tuning, r.capo ? `Capo ${r.capo}` : null].filter(Boolean);
         return (
-          <li key={r.id} className="share-row">
-            <div className="share-song">
-              <span className="share-title">{r.title}</span>
-              {r.artist && <span className="share-artist">{r.artist}</span>}
-              {meta.length > 0 && <span className="share-meta">{meta.join(" · ")}</span>}
-            </div>
-            <div className="share-links">
-              {r.video && (
-                <a href={r.video} target="_blank" rel="noreferrer">
-                  Vídeo
-                </a>
-              )}
-              {r.tab && (
-                <a href={r.tab} target="_blank" rel="noreferrer">
-                  Tab
-                </a>
-              )}
-            </div>
+          <li key={r.id} className="share-card">
+            <span className="share-title">{r.title}</span>
+            {r.artist && <span className="share-artist">{r.artist}</span>}
+            {meta.length > 0 && <span className="share-meta">{meta.join(" · ")}</span>}
+            {(r.original || r.cover) && (
+              <span className="share-links">
+                {r.original && (
+                  <a href={r.original} target="_blank" rel="noreferrer">
+                    Original
+                  </a>
+                )}
+                {r.cover && (
+                  <a href={r.cover} target="_blank" rel="noreferrer">
+                    Cover
+                  </a>
+                )}
+              </span>
+            )}
           </li>
         );
       })}
