@@ -1,10 +1,12 @@
 import { ImageResponse } from "next/og";
 import { connection } from "next/server";
+import sharp from "sharp";
 import { loadShareSections } from "./data";
 
 export const alt = "O que estou tocando, no TuneDeck";
 export const size = { width: 1200, height: 630 };
-export const contentType = "image/png";
+// JPEG: the PNG with photos is ~600 KB, too big for WhatsApp previews.
+export const contentType = "image/jpeg";
 
 const TITLE = "O que estou tocando";
 
@@ -37,7 +39,7 @@ export default async function Image() {
   const text = `TUNEDECK${TITLE}${sections.map((s) => `${s.items.length}${s.title.toLowerCase()}`).join("")}0123456789`;
   const fonts = (await Promise.all([inter(400, text), inter(800, text)])).filter((f) => f !== null);
 
-  return new ImageResponse(
+  const png = new ImageResponse(
     (
       <div
         style={{
@@ -89,4 +91,6 @@ export default async function Image() {
     ),
     { ...size, fonts },
   );
+  const jpeg = await sharp(Buffer.from(await png.arrayBuffer())).jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+  return new Response(new Uint8Array(jpeg), { headers: { "Content-Type": contentType } });
 }
