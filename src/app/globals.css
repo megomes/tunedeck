@@ -5802,12 +5802,13 @@ a.playnow:hover {
   }
   .share-links {
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 3px;
     padding-top: 7px;
   }
   .share-links a {
-    padding: 5px 2px;
-    font-size: 10.5px;
+    padding: 5px 0;
+    font-size: 10px;
+    letter-spacing: -0.01em;
   }
   .share-play {
     width: 30px;
