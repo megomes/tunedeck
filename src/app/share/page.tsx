@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { loadSnapshot } from "@/lib/server/data";
 import type { Entry, Resource, Snapshot } from "@/lib/shared/types";
+import { youtubeId, ytThumb } from "@/lib/shared/urls";
 
 export const metadata: Metadata = {
   title: "O que estou tocando",
@@ -18,13 +19,19 @@ interface Row {
   riffs: string[];
   original: string | null;
   cover: string | null;
+  thumb: string | null;
 }
 
 function rows(snap: Snapshot, entries: Entry[], riffsOf?: (e: Entry) => string[]): Row[] {
   const songs = new Map(snap.songs.map((s) => [s.id, s]));
   return entries.map((e) => {
     const res = snap.resources.filter((r) => r.repertoireEntryId === e.id);
-    const video = (type: Resource["type"]) => res.find((r) => r.type === type && r.provider === "youtube")?.url ?? null;
+    const yt = res.filter((r) => r.provider === "youtube");
+    const find = (type: Resource["type"]) => yt.find((r) => r.type === type);
+    const video = (type: Resource["type"]) => find(type)?.url ?? null;
+    // Official video first, then the cover, then any other video of the song.
+    const pic = find("original") ?? find("guitar_cover") ?? yt[0];
+    const picId = pic ? youtubeId(pic.url) : null;
     const song = songs.get(e.songId);
     return {
       id: e.id,
@@ -35,6 +42,7 @@ function rows(snap: Snapshot, entries: Entry[], riffsOf?: (e: Entry) => string[]
       riffs: riffsOf?.(e) ?? [],
       original: video("original"),
       cover: video("guitar_cover"),
+      thumb: picId ? ytThumb(picId) : (pic?.thumbnailUrl ?? null),
     };
   });
 }
@@ -46,6 +54,10 @@ function List({ items }: { items: Row[] }) {
         const meta = [r.riffs.length ? `Só ${r.riffs.join(", ")}` : null, r.tuning, r.capo ? `Capo ${r.capo}` : null].filter(Boolean);
         return (
           <li key={r.id} className="share-card">
+            <span className="share-thumb">
+              {/* eslint-disable-next-line @next/next/no-img-element -- YouTube thumbnails, already small */}
+              {r.thumb && <img src={r.thumb} alt="" loading="lazy" decoding="async" />}
+            </span>
             <span className="share-title">{r.title}</span>
             {r.artist && <span className="share-artist">{r.artist}</span>}
             {meta.length > 0 && <span className="share-meta">{meta.join(" · ")}</span>}
