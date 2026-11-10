@@ -307,10 +307,46 @@ function scanLibrary() {
 }
 
 ipcMain.handle("open-folder", () => shell.openPath(ensureDir(videosDir())));
-// Re-registered on every launch so the Windows startup entry follows the current exe.
+// Starts with Windows through a shortcut in the user's Startup folder. The Run registry entry
+// that app.setLoginItemSettings writes was being skipped at sign-in on this PC, so it is removed.
+// Re-written on every launch so the shortcut follows the current exe.
+const startupShortcut = () =>
+  path.join(app.getPath("appData"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "TuneDeck.lnk");
+
 function applyOpenAtLogin() {
-  if (!app.isPackaged) return;
-  app.setLoginItemSettings({ openAtLogin: config.openAtLogin, args: ["--hidden"] });
+  if (!app.isPackaged || process.platform !== "win32") return;
+  try {
+    if (app.getLoginItemSettings({ args: ["--hidden"] }).openAtLogin) {
+      app.setLoginItemSettings({ openAtLogin: false, args: ["--hidden"] });
+    }
+    if (config.openAtLogin) {
+      shell.writeShortcutLink(startupShortcut(), "create", {
+        target: process.execPath,
+        args: "--hidden",
+        cwd: path.dirname(process.execPath),
+        icon: process.execPath,
+        iconIndex: 0,
+        description: "TuneDeck, started with Windows",
+      });
+    } else if (fs.existsSync(startupShortcut())) {
+      fs.unlinkSync(startupShortcut());
+    }
+  } catch (err) {
+    console.error("Could not update the startup shortcut", err);
+  }
+}
+
+/** One line per launch in launch.log, to tell whether Windows started the app at sign-in. */
+function logLaunch() {
+  const file = path.join(app.getPath("userData"), "launch.log");
+  try {
+    if (fs.existsSync(file) && fs.statSync(file).size > 64 * 1024) fs.renameSync(file, file + ".old");
+    const uptime = Math.round(os.uptime());
+    fs.appendFileSync(file, `${new Date().toISOString()} v${app.getVersion()} ${process.argv.slice(1).join(" ")} (Windows up ${uptime}s)
+`);
+  } catch {
+    /* diagnostics only */
+  }
 }
 
 ipcMain.handle("set-open-at-login", (_e, on) => {
@@ -845,6 +881,7 @@ ipcMain.handle("retry", (_e, videoId) => {
 
 app.whenReady().then(async () => {
   loadConfig();
+  logLaunch();
   applyOpenAtLogin();
   if (process.platform === "win32") app.setAppUserModelId("app.tunedeck.desktop");
   createTray();
