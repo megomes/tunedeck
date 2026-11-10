@@ -1,6 +1,6 @@
 {
   "name": "tunedeck",
-  "version": "0.18.1",
+  "version": "0.18.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -28,7 +28,8 @@
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/node": "^20",
@@ -38,7 +39,6 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
-    "sharp": "^0.35.5",
     "typescript": "^5"
   }
 }
