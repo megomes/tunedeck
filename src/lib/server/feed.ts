@@ -10,38 +10,52 @@ import { INSTRUMENT_LABEL, STATUSES, STATUS_LABEL, type Snapshot } from "@/lib/s
  * exported in backups or writable through ops.
  */
 export const FEED_TOKEN_KEY = "feedToken";
+/** Secret path of the Claude connector (MCP), which can also add songs. Same rules as the feed token. */
+export const CONNECTOR_TOKEN_KEY = "connectorToken";
+/** Settings that only their own routes read or write. */
+export const SECRET_SETTING_KEYS = new Set([FEED_TOKEN_KEY, CONNECTOR_TOKEN_KEY]);
 
-export async function getFeedToken(): Promise<string | null> {
+async function getToken(key: string): Promise<string | null> {
   const [row] = await db()
     .select({ value: schema.appSettings.value })
     .from(schema.appSettings)
-    .where(eq(schema.appSettings.key, FEED_TOKEN_KEY))
+    .where(eq(schema.appSettings.key, key))
     .limit(1);
   return typeof row?.value === "string" ? row.value : null;
 }
 
 /** Creates a new token, invalidating any link shared before. */
-export async function rotateFeedToken(): Promise<string> {
+async function rotateToken(key: string): Promise<string> {
   const token = randomBytes(24).toString("base64url");
   const now = new Date().toISOString();
   await db()
     .insert(schema.appSettings)
-    .values({ key: FEED_TOKEN_KEY, value: token, updatedAt: now })
+    .values({ key, value: token, updatedAt: now })
     .onConflictDoUpdate({ target: schema.appSettings.key, set: { value: token, updatedAt: now } });
   return token;
 }
 
-export async function disableFeed() {
-  await db().delete(schema.appSettings).where(eq(schema.appSettings.key, FEED_TOKEN_KEY));
+async function deleteToken(key: string) {
+  await db().delete(schema.appSettings).where(eq(schema.appSettings.key, key));
 }
 
-export async function checkFeedToken(given: string): Promise<boolean> {
-  const expected = await getFeedToken();
+async function checkToken(key: string, given: string): Promise<boolean> {
+  const expected = await getToken(key);
   if (!expected) return false;
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+export const getFeedToken = () => getToken(FEED_TOKEN_KEY);
+export const rotateFeedToken = () => rotateToken(FEED_TOKEN_KEY);
+export const disableFeed = () => deleteToken(FEED_TOKEN_KEY);
+export const checkFeedToken = (given: string) => checkToken(FEED_TOKEN_KEY, given);
+
+export const getConnectorToken = () => getToken(CONNECTOR_TOKEN_KEY);
+export const rotateConnectorToken = () => rotateToken(CONNECTOR_TOKEN_KEY);
+export const disableConnector = () => deleteToken(CONNECTOR_TOKEN_KEY);
+export const checkConnectorToken = (given: string) => checkToken(CONNECTOR_TOKEN_KEY, given);
 
 export interface FeedSong {
   title: string;

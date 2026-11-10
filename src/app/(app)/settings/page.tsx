@@ -14,6 +14,7 @@ import {
   Link2Off,
   ShieldOff,
   Smartphone,
+  Sparkles,
   Tags,
   Upload,
   X,
@@ -172,6 +173,95 @@ function AgentFeedSection() {
             >
               <Link2Off />
               <span className="grow">Turn off link</span>
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** MCP URL for a Claude custom connector, so Claude (web, desktop, phone) can add songs. */
+function ClaudeConnectorSection() {
+  const [token, setToken] = useState<string | null | undefined>(undefined);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api("/api/connector")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => j && setToken(j.token))
+      .catch(() => {});
+  }, []);
+
+  async function call(method: "POST" | "DELETE") {
+    setBusy(true);
+    try {
+      const res = await api("/api/connector", { method });
+      if (!res.ok) throw new Error();
+      setToken((await res.json()).token);
+    } catch {
+      toast("Could not update the connector");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const url = token ? `${window.location.origin}/api/mcp/${token}` : "";
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      toast("Connector URL copied");
+    } catch {
+      prompt("Copy this connector URL", url);
+    }
+  };
+
+  return (
+    <section className="section">
+      <p className="step-title">Claude connector</p>
+      <div className="panel" style={{ paddingTop: 6, paddingBottom: 6 }}>
+        <div className="panel-row">
+          <Sparkles />
+          <span className="grow">
+            {token ? "Connector is on" : "Add songs by asking Claude"}
+            <div className="meta">
+              {token
+                ? "In claude.ai: Settings → Connectors → Add custom connector, paste the URL. Then ask “add Misery Business to my Backlog”. Anyone with the URL can add songs: keep it secret."
+                : "Claude finds the videos and the Songsterr tab and adds the song, from your phone or computer."}
+            </div>
+          </span>
+          {token === null && (
+            <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => void call("POST")}>
+              Turn on
+            </button>
+          )}
+        </div>
+        {token && (
+          <>
+            <button className="panel-row" style={{ width: "100%", textAlign: "left" }} onClick={() => void copy()}>
+              <Copy />
+              <span className="grow">
+                Copy connector URL
+                <div className="meta">Paste it as the “Remote MCP server URL”</div>
+              </span>
+            </button>
+            <button
+              className="panel-row"
+              style={{ width: "100%", textAlign: "left" }}
+              disabled={busy}
+              onClick={() => confirm("Create a new URL? Claude stops working until you paste the new one.") && void call("POST")}
+            >
+              <RefreshCw />
+              <span className="grow">Replace URL</span>
+            </button>
+            <button
+              className="panel-row"
+              style={{ width: "100%", textAlign: "left" }}
+              disabled={busy}
+              onClick={() => confirm("Turn off the connector? Claude can no longer add songs.") && void call("DELETE")}
+            >
+              <Link2Off />
+              <span className="grow">Turn off connector</span>
             </button>
           </>
         )}
@@ -352,6 +442,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        <ClaudeConnectorSection />
         <AgentFeedSection />
 
         <section className="section">
